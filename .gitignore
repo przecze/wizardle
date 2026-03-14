@@ -27,5 +27,7 @@ nginx/html/*
 *.swp
 *~
 
-harry_potter_books.csv
-bigrams.pkl
+harrypotter.txt
+harrypotter.pdf
+preprocessing/chapter_names.json
+preprocessing/chapters/
