@@ -318,7 +318,7 @@ mark {
 
 .splash-hourglass {
   display: inline-block;
-  animation: hourglassSpin 1.5s linear both;
+  animation: hourglassSpin 1.2s linear both;
 }
 
 .splash-result {
