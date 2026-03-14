@@ -123,8 +123,8 @@ function GuessSplash({ data, onDismiss }: { data: SplashData; onDismiss: () => v
   const [phase, setPhase] = useState<'hourglass' | 'result'>('hourglass')
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('result'), 1500)
-    const t2 = setTimeout(() => onDismiss(), 2500)
+    const t1 = setTimeout(() => setPhase('result'), 1200)
+    const t2 = setTimeout(() => onDismiss(), 3200)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [onDismiss])
 
@@ -167,10 +167,12 @@ function moveLabel(m: MoveEntry, booksMeta: Record<string, BookMeta>): string {
   if (m.kind === 'word') {
     return `added word on the ${m.direction}: "${m.word}"`
   }
+  const bookNumStr = m.book.match(/Book (\d+)/)?.[1] ?? '?'
+  const bookRoman = BOOK_ICONS[parseInt(bookNumStr) - 1]?.roman ?? bookNumStr
+  const chNum = m.chapter.match(/(\d+)/)?.[1] ?? '?'
   const chName = booksMeta[m.book]?.chapter_names[m.chapter] || m.chapter
-  const bookNum = m.book.match(/Book (\d+)/)?.[1] ?? '?'
-  const result = m.correct ? 'correct!' : m.bookCorrect ? 'right book, wrong chapter' : 'wrong'
-  return `guessed: Book ${bookNum}, ${chName} → ${result}`
+  const result = m.correct ? 'Correct!' : m.bookCorrect ? 'Right book, wrong chapter' : 'Wrong book'
+  return `Book ${bookRoman}, Ch. ${chNum} "${chName}" → ${result}`
 }
 
 // ── Search helpers ────────────────────────────────────────────────────────────
@@ -538,20 +540,22 @@ export default function Game() {
         </div>
       )}
 
-      {/* Move log */}
+      {/* Progress log */}
       {moveLog.length > 0 && (
         <div style={{ padding: '12px 14px', background: '#fffdf7', border: '1px solid #e0d4be', borderRadius: 6, marginBottom: 16 }}>
-          <p style={{ fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#9a8a72', marginBottom: 8 }}>
-            Move log
-          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+            <p style={{ fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#9a8a72', margin: 0 }}>
+              Progress Log
+            </p>
+            <span style={{ fontSize: 12, color: '#b0a090', fontFamily: "'Courier New', Courier, monospace" }}>
+              {moveLog.map(m => moveEmoji(m)).join('')}
+            </span>
+          </div>
           <div className="move-log">
-            {moveLog.map((m, i) => (
+            {[...moveLog].reverse().map((m, i) => (
               <div key={i}>{moveEmoji(m)} {moveLabel(m, booksMeta)}</div>
             ))}
           </div>
-          <p style={{ marginTop: 6, fontSize: 12, color: '#b0a090', fontFamily: "'Courier New', Courier, monospace" }}>
-            {moveLog.map(m => moveEmoji(m)).join('')}
-          </p>
         </div>
       )}
 
