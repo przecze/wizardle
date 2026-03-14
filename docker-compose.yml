@@ -1,0 +1,75 @@
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+      - ./preprocessing:/preprocessing:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - localnet
+    command: uvicorn main:app --reload --workers 1 --host 0.0.0.0 --port 8000
+    restart: always
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: development
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/package.json:/app/package.json
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    networks:
+      - localnet
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    environment:
+      DEV_MODE: "true"
+      NGINX_ENVSUBST_FILTER: DEV_MODE
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
+    networks:
+      - localnet
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - 127.0.0.1:8090:80
+    restart: unless-stopped
+
+  # Production: self-contained nginx with built frontend
+  site:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: production
+    networks:
+      - localnet
+      - nginx-proxy
+    environment:
+      VIRTUAL_HOST: wizardle.janczechowski.com
+      LETSENCRYPT_HOST: wizardle.janczechowski.com
+      DEV_MODE: "false"
+      NGINX_ENVSUBST_FILTER: DEV_MODE
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
+    depends_on:
+      - backend
+    restart: always
+    profiles:
+      - production
+
+networks:
+  localnet:
+  nginx-proxy:
+    external: true

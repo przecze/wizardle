@@ -1,0 +1,31 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
+
+# Docker local volumes
+nginx/html/*
+!nginx/html/.gitkeep
+
+# Backups
+*.backup.*
+*.swp
+*~
+
+harry_potter_books.csv
+bigrams.pkl

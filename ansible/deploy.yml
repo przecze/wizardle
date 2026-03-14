@@ -1,0 +1,78 @@
+# =============================================================================
+# WIZARDLE PROJECT DEPLOYMENT PLAYBOOK
+# =============================================================================
+#
+# SAFETY GUARANTEES:
+#
+# 1. TARGET DIRECTORY: Only /srv/projects/wizardle is touched
+#    - All file operations use project_dir variable
+#
+# 2. DATA FILES:
+#    - harry_potter_books.csv: synced only if changed (--checksum)
+#    - preprocessing/bigrams.pkl: synced from local build
+#
+# 3. NGINX-PROXY INTEGRATION:
+#    - Connects to existing nginx-proxy network (external: true)
+#    - Sets VIRTUAL_HOST=wizardle.janczechowski.com
+#    - Does NOT modify /srv/projects/nginx-proxy/ files
+#
+# 4. DOCKER COMMANDS: Only these docker operations are performed:
+#    - docker compose down (stop existing containers)
+#    - docker compose --profile production up -d --build backend site
+#    All scoped to /srv/projects/wizardle/docker-compose.yml
+#
+# =============================================================================
+
+- name: Deploy wizardle project
+  hosts: bluh
+
+  vars:
+    project_dir: /srv/projects/wizardle
+
+  tasks:
+    - name: Ensure project directory exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Sync project files to server
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: "{{ project_dir }}/"
+        delete: no
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.venv"
+          - "--exclude=venv"
+          - "--exclude=node_modules"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=ansible"
+          - "--exclude=.DS_Store"
+          - "--exclude=*.backup.*"
+          # Large source CSV - use checksum to skip if unchanged
+          - "--checksum"
+
+    - name: Stop existing containers
+      ansible.builtin.shell: |
+        cd {{ project_dir }} && docker compose down --remove-orphans
+      ignore_errors: true
+
+    - name: Build and start containers (production profile)
+      ansible.builtin.shell: |
+        cd {{ project_dir }} && docker compose --profile production up -d --build backend site
+      register: docker_result
+
+    - name: Show docker compose output
+      ansible.builtin.debug:
+        var: docker_result.stdout_lines
+
+    - name: Check container status
+      ansible.builtin.shell: |
+        cd {{ project_dir }} && docker compose ps
+      register: ps_result
+
+    - name: Show running containers
+      ansible.builtin.debug:
+        var: ps_result.stdout_lines
