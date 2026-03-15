@@ -57,7 +57,7 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
           className={`text-area__plus${leftDisabled ? ' text-area__plus--disabled' : ''}`}
           onClick={() => onAddWord('left')}
           disabled={leftDisabled}
-          title={leftLimit ? '15-word limit reached' : `Add word left (${wordsLeft}/15)`}
+          title={leftLimit ? 'Max 15 words can be revealed on either side' : `Add word left (${wordsLeft}/15)`}
           aria-label="Add word to the left"
         >+</button>
       )}
@@ -84,7 +84,7 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
           className={`text-area__plus${rightDisabled ? ' text-area__plus--disabled' : ''}`}
           onClick={() => onAddWord('right')}
           disabled={rightDisabled}
-          title={rightLimit ? '15-word limit reached' : `Add word right (${wordsRight}/15)`}
+          title={rightLimit ? 'Max 15 words can be revealed on either side' : `Add word right (${wordsRight}/15)`}
           aria-label="Add word to the right"
         >+</button>
       )}

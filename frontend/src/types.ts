@@ -21,6 +21,8 @@ export interface GuessAnswer {
   chapter_name: string
   position_pct: number
   context_fragment: string
+  bigram_start: number
+  bigram_len: number
 }
 
 export interface GuessResponse {
@@ -38,4 +40,5 @@ export interface SplashData {
   chapterName: string
   emoji: string
   resultLabel: string
+  isSuccess?: boolean
 }

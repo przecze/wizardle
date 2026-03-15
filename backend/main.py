@@ -22,6 +22,7 @@ from pydantic import BaseModel
 CHAPTERS_DIR       = Path(__file__).parent.parent / "preprocessing" / "chapters"
 CHAPTER_NAMES_PATH = Path(__file__).parent.parent / "preprocessing" / "chapter_names.json"
 MAX_WORDS_EACH_DIRECTION = 15
+CONTEXT_WORDS_EACH_SIDE  = 20
 
 # Dash/ellipsis tokens skipped when generating bigrams (must match build_chapters.py)
 DASH_TOKENS = {"—", "..."}
@@ -313,11 +314,11 @@ def submit_guess(req: GuessRequest):
     tokens   = _chapter_tokens(puzzle["file_path"])
     orig_pos = puzzle["start_pos"]
 
-    # Collect up to MAX_WORDS_EACH_DIRECTION non-dash tokens in each direction
+    # Collect up to CONTEXT_WORDS_EACH_SIDE non-dash tokens in each direction
     left_tokens: list[str] = []
     pos = orig_pos - 1
     nd_count = 0
-    while pos >= 0 and nd_count < MAX_WORDS_EACH_DIRECTION:
+    while pos >= 0 and nd_count < CONTEXT_WORDS_EACH_SIDE:
         if tokens[pos] not in DASH_TOKENS:
             nd_count += 1
         left_tokens.insert(0, tokens[pos])
@@ -328,7 +329,7 @@ def submit_guess(req: GuessRequest):
     right_tokens: list[str] = []
     pos = orig_pos + 2
     nd_count = 0
-    while pos < len(tokens) and nd_count < MAX_WORDS_EACH_DIRECTION:
+    while pos < len(tokens) and nd_count < CONTEXT_WORDS_EACH_SIDE:
         if tokens[pos] not in DASH_TOKENS:
             nd_count += 1
         right_tokens.append(tokens[pos])
@@ -345,5 +346,7 @@ def submit_guess(req: GuessRequest):
             "chapter_name":     puzzle["chapter_name"],
             "position_pct":     puzzle["position_pct"],
             "context_fragment": " ".join(context),
+            "bigram_start":     len(left_tokens),
+            "bigram_len":       len(mid_tokens),
         },
     }

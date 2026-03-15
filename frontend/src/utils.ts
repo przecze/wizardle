@@ -1,5 +1,6 @@
 import { BookMeta, MoveEntry } from './types'
-import { BOOK_ICONS } from './bookIcons'
+
+const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
@@ -26,7 +27,7 @@ export function moveLabel(m: MoveEntry, booksMeta: Record<string, BookMeta>): st
     return `added word on the ${m.direction}: "${m.word}"`
   }
   const bookNumStr = m.book.match(/Book (\d+)/)?.[1] ?? '?'
-  const bookRoman = BOOK_ICONS[parseInt(bookNumStr) - 1]?.roman ?? bookNumStr
+  const bookRoman = ROMANS[parseInt(bookNumStr) - 1] ?? bookNumStr
   const chNum = m.chapter.match(/(\d+)/)?.[1] ?? '?'
   const chName = booksMeta[m.book]?.chapter_names[m.chapter] || m.chapter
   const result = m.correct ? 'Correct!' : m.bookCorrect ? 'Right book, wrong chapter' : 'Wrong book'

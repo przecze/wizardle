@@ -1,6 +1,7 @@
 import React from 'react'
-import { BOOK_ICONS } from '../bookIcons'
 import './GuessButtons.css'
+
+const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 
 interface Props {
   books: string[]
@@ -8,22 +9,25 @@ interface Props {
   confirmedBook: string | null
   loading: boolean
   onSelectBook: (book: string) => void
+  onAbout: () => void
 }
 
-export default function GuessButtons({ books, ruledOutBooks, confirmedBook, loading, onSelectBook }: Props) {
+export default function GuessButtons({ books, ruledOutBooks, confirmedBook, loading, onSelectBook, onAbout }: Props) {
   return (
     <div className="guess-buttons">
-      <p className="guess-buttons__label">Guess the location</p>
+      <p className="guess-buttons__label">
+        Guess the location
+        <button className="guess-buttons__about" onClick={onAbout} aria-label="How to play">?</button>
+      </p>
       <div className="guess-buttons__grid">
         {books.map((book, i) => {
-          const icon = BOOK_ICONS[i]
           const isRuledOut = ruledOutBooks.has(book)
           const isLockedOut = confirmedBook !== null && book !== confirmedBook
           const isDisabled = loading || isRuledOut || isLockedOut
           const enabledBooks = books.filter(b => !ruledOutBooks.has(b) && (confirmedBook === null || b === confirmedBook))
           const isLastEnabled = !isDisabled && enabledBooks.length === 1
 
-          let title = icon?.label ?? ''
+          let title = book
           if (isRuledOut || isLockedOut) title = 'You know the fragment is not from this book'
           else if (isLastEnabled) title = 'You know the fragment comes from this book'
 
@@ -35,9 +39,7 @@ export default function GuessButtons({ books, ruledOutBooks, confirmedBook, load
               disabled={isDisabled}
               title={title}
             >
-              <svg viewBox="0 0 24 24" width="20" height="20" style={{ display: 'block' }}
-                dangerouslySetInnerHTML={{ __html: icon?.svg ?? '' }} />
-              <span className="guess-btn__roman">{icon?.roman}</span>
+              {ROMANS[i]}
             </button>
           )
 

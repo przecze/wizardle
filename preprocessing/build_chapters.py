@@ -163,8 +163,8 @@ def tokenize_text(text: str) -> list[str]:
                 merged[-1] = ELLIPSIS
             else:
                 merged.append(ELLIPSIS)
-        elif tok == "--" and merged:
-            merged[-1] = merged[-1] + "--"
+        elif tok.startswith("--") and merged:
+            merged[-1] = merged[-1] + tok
         else:
             merged.append(tok)
     return merged
