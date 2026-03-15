@@ -1,6 +1,10 @@
-import { BookMeta, MoveEntry } from './types'
+import { MoveEntry } from './types'
 
-const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+export const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+
+export function parseChapterNum(chapterId: string): string {
+  return chapterId.match(/(\d+)/)?.[1] ?? chapterId
+}
 
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
@@ -22,14 +26,3 @@ export function moveEmoji(m: MoveEntry): string {
   return '❌'
 }
 
-export function moveLabel(m: MoveEntry, booksMeta: Record<string, BookMeta>): string {
-  if (m.kind === 'word') {
-    return `added word on the ${m.direction}: "${m.word}"`
-  }
-  const bookNumStr = m.book.match(/Book (\d+)/)?.[1] ?? '?'
-  const bookRoman = ROMANS[parseInt(bookNumStr) - 1] ?? bookNumStr
-  const chNum = m.chapter.match(/(\d+)/)?.[1] ?? '?'
-  const chName = booksMeta[m.book]?.chapter_names[m.chapter] || m.chapter
-  const result = m.correct ? 'Correct!' : m.bookCorrect ? 'Right book, wrong chapter' : 'Wrong book'
-  return `Book ${bookRoman}, Ch. ${chNum} "${chName}" → ${result}`
-}

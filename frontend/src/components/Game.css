@@ -1,0 +1,12 @@
+.game {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 28px 16px;
+}
+
+.game__error {
+  color: #8b2020;
+  font-size: 12.5px;
+  text-align: center;
+  margin-bottom: 12px;
+}

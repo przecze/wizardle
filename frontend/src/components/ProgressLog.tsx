@@ -1,8 +1,6 @@
 import { MoveEntry, BookMeta } from '../types'
-import { moveEmoji } from '../utils'
+import { moveEmoji, ROMANS, parseChapterNum } from '../utils'
 import './ProgressLog.css'
-
-const ROMANS = ['I','II','III','IV','V','VI','VII']
 
 interface Props {
   moveLog: MoveEntry[]
@@ -15,7 +13,7 @@ function MoveLabel({ m, booksMeta }: { m: MoveEntry; booksMeta: Record<string, B
   }
   const bookNumStr = m.book.match(/Book (\d+)/)?.[1] ?? '?'
   const bookRoman = ROMANS[parseInt(bookNumStr) - 1] ?? bookNumStr
-  const chNum = m.chapter.match(/(\d+)/)?.[1] ?? '?'
+  const chNum = parseChapterNum(m.chapter)
   const chName = booksMeta[m.book]?.chapter_names[m.chapter] || m.chapter
   const result = m.correct ? 'Correct!' : m.bookCorrect ? 'Right book, wrong chapter' : 'Wrong book'
   return (

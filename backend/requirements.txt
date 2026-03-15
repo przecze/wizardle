@@ -16,18 +16,10 @@ idna==3.11
     # via anyio
 loguru==0.7.3
     # via -r requirements.in
-numpy==2.4.3
-    # via pandas
-pandas==3.0.1
-    # via -r requirements.in
 pydantic==2.12.5
     # via fastapi
 pydantic-core==2.41.5
     # via pydantic
-python-dateutil==2.9.0.post0
-    # via pandas
-six==1.17.0
-    # via python-dateutil
 starlette==0.52.1
     # via fastapi
 typing-extensions==4.15.0

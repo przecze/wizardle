@@ -1,0 +1,36 @@
+.about-dialog {
+  background: #fffdf7;
+  border: 1px solid #c8b89a;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(44, 36, 22, 0.18);
+  max-width: 400px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.about-bigram {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c2416;
+  text-align: center;
+  letter-spacing: 0.01em;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #e0d4be;
+}
+
+.about-body {
+  padding: 18px 22px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.about-body p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #4a3c28;
+}

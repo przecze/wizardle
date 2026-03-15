@@ -14,6 +14,7 @@
 .char-animated {
   display: inline-block;
   animation: typeIn 80ms ease-out both;
+  animation-delay: calc(var(--char-index) * 35ms);
 }
 
 .text-area {
@@ -38,21 +39,6 @@
   letter-spacing: 0.01em;
   word-break: break-word;
   color: #2c2416;
-}
-
-.text-area__word {
-  display: inline-block;
-  font-weight: 400;
-  color: #6a5a42;
-}
-
-.text-area__word--orig {
-  font-weight: 700;
-  color: #2c2416;
-}
-
-.text-area__placeholder {
-  color: #c8b89a;
 }
 
 .text-area__plus {

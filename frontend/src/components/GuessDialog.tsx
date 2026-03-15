@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BookMeta, MoveEntry } from '../types'
-const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+import { ROMANS, parseChapterNum } from '../utils'
 import './GuessDialog.css'
 
 interface Props {
@@ -66,9 +66,9 @@ export default function GuessDialog({
     moveLog
       .filter(m => m.kind === 'guess' && m.book === selectedBook)
       .map(m => {
-        if (m.kind !== 'guess') return ['', ''] as [string, string]
-        const label = m.correct ? 'correct' : m.bookCorrect ? 'right book, wrong chapter' : 'wrong'
-        return [m.chapter, label] as [string, string]
+        const g = m as Extract<MoveEntry, { kind: 'guess' }>
+        const label = g.correct ? 'correct' : g.bookCorrect ? 'right book, wrong chapter' : 'wrong'
+        return [g.chapter, label] as [string, string]
       })
   )
 
@@ -77,7 +77,7 @@ export default function GuessDialog({
       <div className="dialog" onClick={(e: { stopPropagation: () => void }) => e.stopPropagation()}>
 
         <div className="dialog-header">
-          <span style={{ flexShrink: 0, color: '#7a6a52', fontWeight: 600, fontSize: '15px', fontFamily: 'Georgia, serif', minWidth: '22px', textAlign: 'center' }}>{ROMANS[bookIdx]}</span>
+          <span className="dialog-book-roman">{ROMANS[bookIdx]}</span>
           <span className="dialog-book-title">{selectedBook}</span>
           <button
             className={`search-toggle${searchOpen ? ' active' : ''}`}
@@ -106,7 +106,7 @@ export default function GuessDialog({
         <div className="chapter-list">
           {filtered.map((ch: string) => {
             const name = booksMeta[selectedBook]?.chapter_names[ch] || ch
-            const num = ch.match(/(\d+)/)?.[1] ?? ''
+            const num = parseChapterNum(ch)
             const guessedResult = guessedChapters.get(ch)
             const isGuessed = guessedResult !== undefined
             return (

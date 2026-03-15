@@ -90,9 +90,8 @@ Single `nginx.conf.template` with `DEV_MODE` env var:
 
 `frontend/src/` shared modules:
 - `types.ts` — all shared TypeScript interfaces (`BookMeta`, `PuzzleResponse`, `MoveEntry`, `SplashData`, etc.)
-- `bookIcons.ts` — `BOOK_ICONS` SVG/label/roman array (one entry per HP book)
-- `utils.ts` — `todayStr`, `apiFetch`, `moveEmoji`, `moveLabel`
-- `index.css` — global reset, body font, shared `.btn-primary` / `.btn-ghost`
+- `utils.ts` — `ROMANS`, `todayStr`, `apiFetch`, `moveEmoji`, `parseChapterNum`
+- `index.css` — global reset, body font, shared `.btn-primary` / `.btn-ghost` / `.word-token` / `.word-placeholder`
 
 `frontend/src/components/` — each component has a co-located `.css` file:
 
