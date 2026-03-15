@@ -9,6 +9,7 @@ import GuessDialog from './GuessDialog'
 import GuessAnimation from './GuessAnimation'
 import SuccessDialog from './SuccessDialog'
 import AboutDialog from './AboutDialog'
+import './Game.css'
 
 type GuessPhase = 'idle' | 'chapter'
 
@@ -147,12 +148,12 @@ export default function Game() {
   }
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '28px 16px' }}>
+    <div className="game">
 
       <TitleBar date={date} onNavigate={navigateDate} />
 
       {error && (
-        <p style={{ color: '#8b2020', fontSize: 12.5, textAlign: 'center', marginBottom: 12 }}>{error}</p>
+        <p className="game__error">{error}</p>
       )}
 
       {showSuccess && winner ? (

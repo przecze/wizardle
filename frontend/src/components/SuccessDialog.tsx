@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { GuessAnswer, MoveEntry } from '../types'
-import { moveEmoji } from '../utils'
+import { moveEmoji, parseChapterNum } from '../utils'
 import './SuccessDialog.css'
 
 interface Props {
@@ -25,7 +25,7 @@ function formatReadableDate(dateStr: string): string {
 
 export default function SuccessDialog({ winner, moveLog, date, origBigram }: Props) {
   const [copied, setCopied] = useState(false)
-  const chapNum = winner.chapter.match(/chap-(\d+)/)?.[1] ?? winner.chapter
+  const chapNum = parseChapterNum(winner.chapter)
   const tokens = winner.context_fragment.split(' ')
 
   function shareText(): string {
@@ -55,17 +55,17 @@ export default function SuccessDialog({ winner, moveLog, date, origBigram }: Pro
       </p>
 
       <div className="success-dialog__fragment">
-        <span className="text-area__placeholder">… </span>
+        <span className="word-placeholder">… </span>
         {tokens.map((tok, i) => {
           const isOrig = i >= winner.bigram_start && i < winner.bigram_start + winner.bigram_len
           return (
             <span key={i}>
-              <span className={`text-area__word${isOrig ? ' text-area__word--orig' : ''}`}>{tok}</span>
+              <span className={`word-token${isOrig ? ' word-token--orig' : ''}`}>{tok}</span>
               {i < tokens.length - 1 ? ' ' : ''}
             </span>
           )
         })}
-        <span className="text-area__placeholder"> …</span>
+        <span className="word-placeholder"> …</span>
       </div>
 
       <p className="success-dialog__position">{winner.position_pct.toFixed(1)}% into chapter</p>

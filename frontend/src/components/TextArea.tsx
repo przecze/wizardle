@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import React, { useRef } from 'react'
 import './TextArea.css'
 
 interface Props {
@@ -16,7 +16,7 @@ function AnimatedWord({ word }: { word: string }) {
   return (
     <>
       {word.split('').map((ch, i) => (
-        <span key={i} className="char-animated" style={{ animationDelay: `${i * 35}ms` }}>
+        <span key={i} className="char-animated" style={{ '--char-index': i } as React.CSSProperties}>
           {ch}
         </span>
       ))}
@@ -69,14 +69,14 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
           const key = getWordKey(i)
           return (
             <span key={key}>
-              <span className={`text-area__word${isOrig ? ' text-area__word--orig' : ''}`}>
+              <span className={`word-token${isOrig ? ' word-token--orig' : ''}`}>
                 {isNew ? <AnimatedWord word={w} /> : w}
               </span>
               {i < words.length - 1 ? ' ' : ''}
             </span>
           )
         })}
-        {words.length === 0 && <span className="text-area__placeholder">…</span>}
+        {words.length === 0 && <span className="word-placeholder">…</span>}
       </div>
 
       {!winner && (

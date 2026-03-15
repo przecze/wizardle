@@ -1,7 +1,6 @@
-import React from 'react'
+import { Fragment } from 'react'
+import { ROMANS } from '../utils'
 import './GuessButtons.css'
-
-const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 
 interface Props {
   books: string[]
@@ -43,7 +42,7 @@ export default function GuessButtons({ books, ruledOutBooks, confirmedBook, load
             </button>
           )
 
-          if (i === 4) return <React.Fragment key={book}><div className="book-row-break" />{btn}</React.Fragment>
+          if (i === 4) return <Fragment key={book}><div className="book-row-break" />{btn}</Fragment>
           return btn
         })}
       </div>

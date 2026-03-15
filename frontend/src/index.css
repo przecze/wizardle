@@ -50,3 +50,20 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Shared word-token styles — used by TextArea and SuccessDialog */
+
+.word-token {
+  display: inline-block;
+  font-weight: 400;
+  color: #6a5a42;
+}
+
+.word-token--orig {
+  font-weight: 700;
+  color: #2c2416;
+}
+
+.word-placeholder {
+  color: #c8b89a;
+}

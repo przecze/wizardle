@@ -31,6 +31,16 @@
   flex-shrink: 0;
 }
 
+.dialog-book-roman {
+  flex-shrink: 0;
+  color: #7a6a52;
+  font-weight: 600;
+  font-size: 15px;
+  font-family: Georgia, serif;
+  min-width: 22px;
+  text-align: center;
+}
+
 .dialog-book-title {
   flex: 1;
   font-size: 14px;
