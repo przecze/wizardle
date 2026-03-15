@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { GuessAnswer, MoveEntry } from '../types'
 import { moveEmoji, parseChapterNum } from '../utils'
 import './SuccessDialog.css'
@@ -25,8 +25,13 @@ function formatReadableDate(dateStr: string): string {
 
 export default function SuccessDialog({ winner, moveLog, date, origBigram }: Props) {
   const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const chapNum = parseChapterNum(winner.chapter)
   const tokens = winner.context_fragment.split(' ')
+
+  useEffect(() => {
+    return () => { if (copiedTimer.current) clearTimeout(copiedTimer.current) }
+  }, [])
 
   function shareText(): string {
     const bigram = origBigram.join(' ')
@@ -43,7 +48,7 @@ export default function SuccessDialog({ winner, moveLog, date, origBigram }: Pro
     } else {
       await navigator.clipboard.writeText(text)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000)
     }
   }
 

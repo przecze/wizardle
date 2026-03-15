@@ -33,9 +33,12 @@ export default function ProgressLog({ moveLog, booksMeta }: Props) {
         </span>
       </div>
       <div className="move-log">
-        {[...moveLog].reverse().map((m, i) => (
-          <div key={i}>{moveEmoji(m)} <MoveLabel m={m} booksMeta={booksMeta} /></div>
-        ))}
+        {[...moveLog].reverse().map((m, _i, arr) => {
+          const origIdx = arr.length - 1 - _i
+          return (
+            <div key={origIdx}>{moveEmoji(m)} <MoveLabel m={m} booksMeta={booksMeta} /></div>
+          )
+        })}
       </div>
     </div>
   )
