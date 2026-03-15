@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Wizardle** — a Wordle-like game where you identify the exact Harry Potter book and chapter from a minimal text fragment (bigram). The puzzle is date-seeded so everyone plays the same puzzle daily.
+**Pensievely** — a Wordle-like game where you identify the exact Harry Potter book and chapter from a minimal text fragment (bigram). The puzzle is date-seeded so everyone plays the same puzzle daily.
 
 ## Tech Stack
 

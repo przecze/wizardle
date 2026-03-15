@@ -58,8 +58,8 @@ services:
       - localnet
       - nginx-proxy
     environment:
-      VIRTUAL_HOST: wizardle.janczechowski.com
-      LETSENCRYPT_HOST: wizardle.janczechowski.com
+      VIRTUAL_HOST: pensievely.com
+      LETSENCRYPT_HOST: pensievely.com
       DEV_MODE: "false"
       NGINX_ENVSUBST_FILTER: DEV_MODE
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
@@ -68,6 +68,19 @@ services:
     restart: always
     profiles:
       - production
+
+  # Frontend tests: docker compose --profile test run --rm tester
+  tester:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: test
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/vitest.config.ts:/app/vitest.config.ts
+      - /app/node_modules
+    profiles:
+      - test
 
 networks:
   localnet:

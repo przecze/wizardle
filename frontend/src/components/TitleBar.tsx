@@ -10,7 +10,7 @@ export default function TitleBar({ date, onNavigate }: Props) {
   const isLatest = date >= todayStr()
   return (
     <header className="title-bar">
-      <h1 className="title-bar__heading">Wizardle</h1>
+      <h1 className="title-bar__heading">Pensievely</h1>
       <div className="title-bar__nav">
         <button
           className="title-bar__nav-btn"

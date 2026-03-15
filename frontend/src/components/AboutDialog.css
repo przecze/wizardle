@@ -1,8 +1,10 @@
 .about-dialog {
-  background: #fffdf7;
-  border: 1px solid #c8b89a;
+  background: var(--color-surface-solid);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  box-shadow: 0 8px 32px rgba(44, 36, 22, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(120, 100, 200, 0.06);
   max-width: 400px;
   width: 100%;
   display: flex;
@@ -14,11 +16,12 @@
   font-family: 'Courier New', Courier, monospace;
   font-size: 18px;
   font-weight: 700;
-  color: #2c2416;
+  color: var(--color-text-primary);
   text-align: center;
   letter-spacing: 0.01em;
   padding: 22px 24px 18px;
-  border-bottom: 1px solid #e0d4be;
+  border-bottom: 1px solid var(--color-border-inner);
+  text-shadow: 0 0 10px var(--color-glow);
 }
 
 .about-body {
@@ -32,5 +35,5 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.55;
-  color: #4a3c28;
+  color: var(--color-text-body);
 }

@@ -1,4 +1,4 @@
-# Wizardle - guess the exact Harry Potter book and chapter with minimal number of words
+# Pensievely - guess the exact Harry Potter book and chapter with minimal number of words
 
 
 

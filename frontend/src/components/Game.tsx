@@ -9,6 +9,7 @@ import GuessDialog from './GuessDialog'
 import GuessAnimation from './GuessAnimation'
 import SuccessDialog from './SuccessDialog'
 import AboutDialog from './AboutDialog'
+import PensieveBackdrop from './PensieveBackdrop'
 import './Game.css'
 
 type GuessPhase = 'idle' | 'chapter'
@@ -149,6 +150,7 @@ export default function Game() {
 
   return (
     <div className="game">
+      <PensieveBackdrop />
 
       <TitleBar date={date} onNavigate={navigateDate} />
 
