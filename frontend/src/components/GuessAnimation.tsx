@@ -28,17 +28,17 @@ export default function GuessAnimation({ data, onDismiss }: Props) {
             ? (
               <svg className="splash-hourglass-svg" viewBox="0 0 24 24" width="56" height="56" fill="none">
                 {/* caps */}
-                <rect x="4" y="2.5" width="16" height="2" rx="1" fill="#5a4a35"/>
-                <rect x="4" y="19.5" width="16" height="2" rx="1" fill="#5a4a35"/>
-                {/* top sand */}
-                <path d="M5.5 4.5 L18.5 4.5 L12 11 Z" fill="#c8a84b"/>
-                {/* bottom sand */}
-                <path d="M8.5 19.5 L15.5 19.5 L12 14.5 Z" fill="#c8a84b"/>
+                <rect x="4" y="2.5" width="16" height="2" rx="1" fill="#6e6890"/>
+                <rect x="4" y="19.5" width="16" height="2" rx="1" fill="#6e6890"/>
+                {/* top liquid */}
+                <path d="M5.5 4.5 L18.5 4.5 L12 11 Z" fill="#8878c0" opacity="0.7"/>
+                {/* bottom liquid */}
+                <path d="M8.5 19.5 L15.5 19.5 L12 14.5 Z" fill="#8878c0" opacity="0.7"/>
                 {/* glass lines */}
-                <line x1="5.5" y1="4.5" x2="12" y2="11" stroke="#5a4a35" strokeWidth="1.3"/>
-                <line x1="18.5" y1="4.5" x2="12" y2="11" stroke="#5a4a35" strokeWidth="1.3"/>
-                <line x1="5.5" y1="19.5" x2="12" y2="13" stroke="#5a4a35" strokeWidth="1.3"/>
-                <line x1="18.5" y1="19.5" x2="12" y2="13" stroke="#5a4a35" strokeWidth="1.3"/>
+                <line x1="5.5" y1="4.5" x2="12" y2="11" stroke="#6e6890" strokeWidth="1.3"/>
+                <line x1="18.5" y1="4.5" x2="12" y2="11" stroke="#6e6890" strokeWidth="1.3"/>
+                <line x1="5.5" y1="19.5" x2="12" y2="13" stroke="#6e6890" strokeWidth="1.3"/>
+                <line x1="18.5" y1="19.5" x2="12" y2="13" stroke="#6e6890" strokeWidth="1.3"/>
               </svg>
             )
             : <span className="splash-result">{data.emoji}</span>

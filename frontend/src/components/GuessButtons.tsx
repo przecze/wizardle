@@ -37,8 +37,10 @@ export default function GuessButtons({ books, ruledOutBooks, confirmedBook, load
               onClick={() => { if (!isDisabled) onSelectBook(book) }}
               disabled={isDisabled}
               title={title}
+              style={{ '--vial-index': `${i * 0.6}s` } as React.CSSProperties}
             >
-              {ROMANS[i]}
+              <span className="vial-liquid" />
+              <span>{ROMANS[i]}</span>
             </button>
           )
 

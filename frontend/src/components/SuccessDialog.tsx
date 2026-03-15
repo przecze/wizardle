@@ -37,7 +37,7 @@ export default function SuccessDialog({ winner, moveLog, date, origBigram }: Pro
     const bigram = origBigram.join(' ')
     const q = bigram.includes('"') ? "'" : '"'
     const emojis = moveLog.map(m => moveEmoji(m)).join('')
-    return `wizardle.janczechowski.com\n${formatReadableDate(date)}\n${q}...${bigram}...${q}\n${emojis}`
+    return `pensievely.com\n${formatReadableDate(date)}\n${q}...${bigram}...${q}\n${emojis}`
   }
 
   async function handleShare() {

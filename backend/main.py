@@ -1,5 +1,5 @@
 """
-Wizardle API — FastAPI backend.
+Pensievely API — FastAPI backend.
 
 Loads nothing at startup. For each request, reads the relevant chapter TSV
 from preprocessing/chapters/ on demand.
@@ -37,7 +37,7 @@ BOOK_NAMES = [
     "Book 7: Deathly Hallows",
 ]
 
-app = FastAPI(title="Wizardle API")
+app = FastAPI(title="Pensievely API")
 
 # ---------------------------------------------------------------------------
 # Lazy books metadata (tiny JSON, loaded once on first use)

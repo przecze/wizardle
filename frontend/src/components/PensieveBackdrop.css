@@ -1,0 +1,143 @@
+.pensieve-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Silvery wisps that drift across the surface */
+.pensieve-wisp {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(170, 160, 240, 0.12) 0%,
+    rgba(140, 130, 210, 0.06) 40%,
+    transparent 70%
+  );
+  filter: blur(20px);
+  animation: wispDrift linear infinite;
+}
+
+.pensieve-wisp:nth-child(1) {
+  width: 300px;
+  height: 180px;
+  top: 10%;
+  left: -150px;
+  animation-duration: 18s;
+  animation-delay: 0s;
+}
+
+.pensieve-wisp:nth-child(2) {
+  width: 250px;
+  height: 150px;
+  top: 50%;
+  left: -125px;
+  animation-duration: 22s;
+  animation-delay: -5s;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(120, 140, 220, 0.10) 0%,
+    rgba(100, 120, 200, 0.05) 40%,
+    transparent 70%
+  );
+}
+
+.pensieve-wisp:nth-child(3) {
+  width: 200px;
+  height: 120px;
+  top: 30%;
+  left: -100px;
+  animation-duration: 25s;
+  animation-delay: -12s;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(180, 160, 230, 0.08) 0%,
+    rgba(160, 140, 210, 0.04) 40%,
+    transparent 70%
+  );
+}
+
+.pensieve-wisp:nth-child(4) {
+  width: 350px;
+  height: 200px;
+  top: 70%;
+  left: -175px;
+  animation-duration: 20s;
+  animation-delay: -8s;
+}
+
+.pensieve-wisp:nth-child(5) {
+  width: 180px;
+  height: 100px;
+  top: 85%;
+  left: -90px;
+  animation-duration: 16s;
+  animation-delay: -3s;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(150, 130, 230, 0.10) 0%,
+    rgba(130, 110, 200, 0.05) 40%,
+    transparent 70%
+  );
+}
+
+@keyframes wispDrift {
+  0%   { transform: translateX(0)            translateY(0)    scaleX(1)   rotate(0deg);   opacity: 0; }
+  5%   { opacity: 1; }
+  50%  { transform: translateX(55vw)         translateY(-30px) scaleX(1.3) rotate(8deg);  opacity: 0.8; }
+  95%  { opacity: 1; }
+  100% { transform: translateX(110vw)        translateY(10px)  scaleX(1)   rotate(-3deg); opacity: 0; }
+}
+
+/* Tiny sparkle particles */
+.pensieve-sparkle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(200, 190, 255, 0.6);
+  box-shadow: 0 0 4px rgba(180, 170, 240, 0.4);
+  animation: sparkleFloat linear infinite;
+}
+
+.pensieve-sparkle:nth-child(6)  { left: 15%; animation-duration: 8s;  animation-delay: 0s;   top: 100%; }
+.pensieve-sparkle:nth-child(7)  { left: 35%; animation-duration: 10s; animation-delay: -2s;  top: 100%; width: 3px; height: 3px; }
+.pensieve-sparkle:nth-child(8)  { left: 55%; animation-duration: 9s;  animation-delay: -4s;  top: 100%; }
+.pensieve-sparkle:nth-child(9)  { left: 72%; animation-duration: 11s; animation-delay: -1s;  top: 100%; }
+.pensieve-sparkle:nth-child(10) { left: 88%; animation-duration: 7s;  animation-delay: -6s;  top: 100%; width: 3px; height: 3px; }
+.pensieve-sparkle:nth-child(11) { left: 25%; animation-duration: 12s; animation-delay: -3s;  top: 100%; }
+.pensieve-sparkle:nth-child(12) { left: 45%; animation-duration: 8s;  animation-delay: -7s;  top: 100%; }
+.pensieve-sparkle:nth-child(13) { left: 65%; animation-duration: 10s; animation-delay: -5s;  top: 100%; width: 3px; height: 3px; }
+.pensieve-sparkle:nth-child(14) { left: 8%;  animation-duration: 9s;  animation-delay: -9s;  top: 100%; }
+.pensieve-sparkle:nth-child(15) { left: 80%; animation-duration: 11s; animation-delay: -10s; top: 100%; }
+
+@keyframes sparkleFloat {
+  0%   { transform: translateY(0) translateX(0);      opacity: 0; }
+  10%  { opacity: 0.8; }
+  50%  { transform: translateY(-50vh) translateX(15px); opacity: 0.5; }
+  90%  { opacity: 0.3; }
+  100% { transform: translateY(-105vh) translateX(-10px); opacity: 0; }
+}
+
+/* Slow surface shimmer — a faint light sweep */
+.pensieve-surface {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(160, 150, 230, 0.04) 45%,
+    rgba(180, 170, 250, 0.07) 50%,
+    rgba(160, 150, 230, 0.04) 55%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: surfaceSweep 8s ease-in-out infinite;
+}
+
+@keyframes surfaceSweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

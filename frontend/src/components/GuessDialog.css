@@ -1,19 +1,22 @@
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(44, 36, 22, 0.45);
+  background: var(--color-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
   padding: 16px;
+  backdrop-filter: blur(4px);
 }
 
 .dialog {
-  background: #fffdf7;
-  border: 1px solid #c8b89a;
+  background: var(--color-surface-solid);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  box-shadow: 0 8px 32px rgba(44, 36, 22, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(120, 100, 200, 0.06);
   max-width: 480px;
   width: 100%;
   max-height: 80vh;
@@ -27,13 +30,13 @@
   align-items: center;
   gap: 10px;
   padding: 16px 18px 14px;
-  border-bottom: 1px solid #e0d4be;
+  border-bottom: 1px solid var(--color-border-inner);
   flex-shrink: 0;
 }
 
 .dialog-book-roman {
   flex-shrink: 0;
-  color: #7a6a52;
+  color: var(--color-text-secondary);
   font-weight: 600;
   font-size: 15px;
   font-family: Georgia, serif;
@@ -47,7 +50,7 @@
   font-weight: normal;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #7a6a52;
+  color: var(--color-text-secondary);
 }
 
 .search-toggle {
@@ -55,7 +58,7 @@
   border: none;
   cursor: pointer;
   padding: 3px;
-  color: #9a8a72;
+  color: var(--color-text-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -65,34 +68,34 @@
 }
 
 .search-toggle:hover {
-  color: #5a4a32;
-  background: #f0e8d8;
+  color: var(--color-text-primary);
+  background: var(--color-hover-bg);
 }
 
 .search-toggle.active {
-  color: #2c2416;
+  color: var(--color-text-primary);
 }
 
 .search-bar {
   padding: 8px 14px;
-  border-bottom: 1px solid #e0d4be;
+  border-bottom: 1px solid var(--color-border-inner);
   flex-shrink: 0;
 }
 
 .search-bar input {
   width: 100%;
-  background: #f5f0e8;
-  border: 1px solid #d0c4ae;
+  background: rgba(15, 14, 26, 0.5);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 6px 10px;
   font-family: inherit;
   font-size: 13px;
-  color: #2c2416;
+  color: var(--color-text-primary);
   outline: none;
 }
 
 .search-bar input:focus {
-  border-color: #a08060;
+  border-color: var(--color-selected-border);
 }
 
 .chapter-list {
@@ -114,7 +117,7 @@
   cursor: pointer;
   font-family: inherit;
   font-size: 13.5px;
-  color: #2c2416;
+  color: var(--color-text-primary);
   transition: background 120ms, border-color 120ms;
   display: flex;
   align-items: baseline;
@@ -122,25 +125,25 @@
 }
 
 .chapter-btn:hover {
-  background: #f0e8d8;
-  border-color: #c8b89a;
+  background: var(--color-hover-bg);
+  border-color: var(--color-border);
 }
 
 .chapter-btn.selected {
-  background: #e8dcca;
-  border-color: #a08060;
+  background: var(--color-selected-bg);
+  border-color: var(--color-selected-border);
   font-weight: bold;
 }
 
 .chapter-btn.guessed {
   opacity: 0.38;
   cursor: default;
-  color: #7a6a52;
+  color: var(--color-text-secondary);
 }
 
 .chapter-num {
   font-size: 11px;
-  color: #a09080;
+  color: var(--color-text-muted);
   min-width: 22px;
   text-align: right;
   flex-shrink: 0;
@@ -148,11 +151,11 @@
 }
 
 .chapter-btn.selected .chapter-num {
-  color: #7a5a30;
+  color: var(--color-text-secondary);
 }
 
 mark {
-  background: #f0d890;
+  background: var(--color-mark-bg);
   border-radius: 2px;
   padding: 0 1px;
   color: inherit;
@@ -164,6 +167,6 @@ mark {
   align-items: center;
   justify-content: flex-end;
   padding: 12px 16px;
-  border-top: 1px solid #e0d4be;
+  border-top: 1px solid var(--color-border-inner);
   flex-shrink: 0;
 }

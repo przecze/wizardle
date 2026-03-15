@@ -1,19 +1,21 @@
 @keyframes typeIn {
   from {
     opacity: 0;
-    transform: translateY(3px) scaleX(0.85);
-    filter: blur(1px);
+    transform: translateY(8px) scaleX(0.85);
+    filter: blur(4px);
+    text-shadow: 0 0 16px rgba(160, 140, 230, 0.6);
   }
   to {
     opacity: 1;
     transform: translateY(0) scaleX(1);
     filter: blur(0);
+    text-shadow: 0 0 8px var(--color-glow);
   }
 }
 
 .char-animated {
   display: inline-block;
-  animation: typeIn 80ms ease-out both;
+  animation: typeIn 100ms ease-out both;
   animation-delay: calc(var(--char-index) * 35ms);
 }
 
@@ -21,13 +23,16 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #fffdf7;
-  border: 1px solid #d8ccb4;
-  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
   padding: 18px 12px;
   margin-bottom: 24px;
   min-height: 72px;
-  box-shadow: 0 1px 4px rgba(44, 36, 22, 0.05);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.2),
+    inset 0 1px 6px rgba(140, 120, 200, 0.06);
+  backdrop-filter: blur(8px);
 }
 
 .text-area__content {
@@ -38,7 +43,7 @@
   text-align: center;
   letter-spacing: 0.01em;
   word-break: break-word;
-  color: #2c2416;
+  color: var(--color-text-primary);
 }
 
 .text-area__plus {
@@ -46,23 +51,33 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  border: 1.5px solid #a09080;
+  border: 1px solid var(--color-border);
   background: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #7a6a52;
+  color: var(--color-text-secondary);
   font-size: 18px;
   line-height: 1;
   padding: 0;
-  transition: opacity 120ms;
+  transition: border-color 120ms, color 120ms;
   user-select: none;
 }
 
+.text-area__plus:hover {
+  border-color: var(--color-selected-border);
+  color: var(--color-text-primary);
+}
+
 .text-area__plus--disabled {
-  border-color: #d8ccb4;
-  color: #d8ccb4;
+  border-color: var(--color-border-disabled);
+  color: var(--color-text-muted);
   cursor: default;
   opacity: 0.4;
+}
+
+.text-area__plus--disabled:hover {
+  border-color: var(--color-border-disabled);
+  color: var(--color-text-muted);
 }
