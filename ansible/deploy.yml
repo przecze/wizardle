@@ -17,8 +17,8 @@
 #    - Does NOT modify /srv/projects/nginx-proxy/ files
 #
 # 4. DOCKER COMMANDS: Only these docker operations are performed:
-#    - docker compose down (stop existing containers)
-#    - docker compose --profile production up -d --build backend site
+#    - docker compose --profile production build backend site (pre-build)
+#    - docker compose --profile production up -d --force-recreate --remove-orphans backend site
 #    All scoped to /srv/projects/wizardle/docker-compose.yml
 #
 # =============================================================================
@@ -54,14 +54,13 @@
           # Large source CSV - use checksum to skip if unchanged
           - "--checksum"
 
-    - name: Stop existing containers
+    - name: Build images (production profile)
       ansible.builtin.shell: |
-        cd {{ project_dir }} && docker compose down --remove-orphans
-      ignore_errors: true
+        cd {{ project_dir }} && docker compose --profile production build backend site
 
-    - name: Build and start containers (production profile)
+    - name: Start containers (production profile)
       ansible.builtin.shell: |
-        cd {{ project_dir }} && docker compose --profile production up -d --build backend site
+        cd {{ project_dir }} && docker compose --profile production up -d --force-recreate --remove-orphans backend site
       register: docker_result
 
     - name: Show docker compose output

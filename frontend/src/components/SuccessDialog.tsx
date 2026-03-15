@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { GuessAnswer, MoveEntry } from '../types'
 import { moveEmoji } from '../utils'
 import './SuccessDialog.css'
@@ -6,24 +7,75 @@ interface Props {
   winner: GuessAnswer
   moveLog: MoveEntry[]
   date: string
+  origBigram: string[]
 }
 
-export default function SuccessDialog({ winner, moveLog, date }: Props) {
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+function formatReadableDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December']
+  return `${months[month - 1]} ${ordinal(day)} ${year}`
+}
+
+export default function SuccessDialog({ winner, moveLog, date, origBigram }: Props) {
+  const [copied, setCopied] = useState(false)
+  const chapNum = winner.chapter.match(/chap-(\d+)/)?.[1] ?? winner.chapter
+  const tokens = winner.context_fragment.split(' ')
+
   function shareText(): string {
-    return `Wizardle ${date}\n${moveLog.map(m => moveEmoji(m)).join('')}`
+    const bigram = origBigram.join(' ')
+    const q = bigram.includes('"') ? "'" : '"'
+    const emojis = moveLog.map(m => moveEmoji(m)).join('')
+    return `wizardle.janczechowski.com\n${formatReadableDate(date)}\n${q}...${bigram}...${q}\n${emojis}`
+  }
+
+  async function handleShare() {
+    const text = shareText()
+    const isMobile = navigator.maxTouchPoints > 0
+    if (isMobile && navigator.share) {
+      try { await navigator.share({ text }) } catch { /* cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   return (
     <div className="success-dialog">
-      <p className="success-dialog__label">Correct!</p>
-      <p className="success-dialog__book">{winner.book}</p>
-      <p className="success-dialog__chapter">{winner.chapter_name || winner.chapter}</p>
+      <p className="success-dialog__book">📚 {winner.book} 📚</p>
+      <p className="success-dialog__chapter">
+        ✨ Chapter {chapNum}{winner.chapter_name ? `: ${winner.chapter_name}` : ''} ✨
+      </p>
+
+      <div className="success-dialog__fragment">
+        <span className="text-area__placeholder">… </span>
+        {tokens.map((tok, i) => {
+          const isOrig = i >= winner.bigram_start && i < winner.bigram_start + winner.bigram_len
+          return (
+            <span key={i}>
+              <span className={`text-area__word${isOrig ? ' text-area__word--orig' : ''}`}>{tok}</span>
+              {i < tokens.length - 1 ? ' ' : ''}
+            </span>
+          )
+        })}
+        <span className="text-area__placeholder"> …</span>
+      </div>
+
       <p className="success-dialog__position">{winner.position_pct.toFixed(1)}% into chapter</p>
-      <div className="success-dialog__fragment">{winner.context_fragment}</div>
-      <button className="btn-primary" onClick={() => navigator.clipboard.writeText(shareText())}>
-        Copy result
-      </button>
-      <pre className="success-dialog__share">{shareText()}</pre>
+
+      <div className="success-dialog__share-wrap">
+        <button className="btn-primary success-dialog__share" onClick={handleShare}>
+          Share result
+        </button>
+        {copied && <span className="success-dialog__toast">Copied to clipboard!</span>}
+      </div>
     </div>
   )
 }

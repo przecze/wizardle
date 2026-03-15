@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BookMeta, MoveEntry } from '../types'
-import { BOOK_ICONS } from '../bookIcons'
+const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 import './GuessDialog.css'
 
 interface Props {
@@ -56,7 +56,6 @@ export default function GuessDialog({
   const [searchQuery, setSearchQuery] = useState('')
 
   const bookIdx = books.indexOf(selectedBook)
-  const icon = BOOK_ICONS[bookIdx]
   const chapters = booksMeta[selectedBook]?.chapters ?? []
   const normQ = normalizeSearch(searchQuery).trim()
   const filtered = normQ
@@ -78,8 +77,7 @@ export default function GuessDialog({
       <div className="dialog" onClick={(e: { stopPropagation: () => void }) => e.stopPropagation()}>
 
         <div className="dialog-header">
-          <svg viewBox="0 0 24 24" width="22" height="22" style={{ flexShrink: 0, color: '#7a6a52' }}
-            dangerouslySetInnerHTML={{ __html: icon?.svg ?? '' }} />
+          <span style={{ flexShrink: 0, color: '#7a6a52', fontWeight: 600, fontSize: '15px', fontFamily: 'Georgia, serif', minWidth: '22px', textAlign: 'center' }}>{ROMANS[bookIdx]}</span>
           <span className="dialog-book-title">{selectedBook}</span>
           <button
             className={`search-toggle${searchOpen ? ' active' : ''}`}

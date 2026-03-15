@@ -8,6 +8,7 @@ import ProgressLog from './ProgressLog'
 import GuessDialog from './GuessDialog'
 import GuessAnimation from './GuessAnimation'
 import SuccessDialog from './SuccessDialog'
+import AboutDialog from './AboutDialog'
 
 type GuessPhase = 'idle' | 'chapter'
 
@@ -25,6 +26,7 @@ export default function Game() {
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null)
 
   const [winner, setWinner] = useState<GuessAnswer | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
   const [moveLog, setMoveLog] = useState<MoveEntry[]>([])
   const [splash, setSplash] = useState<SplashData | null>(null)
 
@@ -36,6 +38,7 @@ export default function Game() {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -102,7 +105,7 @@ export default function Game() {
         correct: data.correct,
         bookCorrect: data.correct || !!data.book_correct,
       }])
-      setSplash({ book: selectedBook, chapterName: chName, emoji, resultLabel })
+      setSplash({ book: selectedBook, chapterName: chName, emoji, resultLabel, isSuccess: data.correct })
       setGuessPhase('idle')
       if (data.correct && data.answer) {
         setWinner(data.answer)
@@ -132,6 +135,7 @@ export default function Game() {
     setOrigBigram([])
     setMoveLog([])
     setWinner(null)
+    setShowSuccess(false)
     setLeftLimit(false)
     setRightLimit(false)
     setGuessPhase('idle')
@@ -151,16 +155,20 @@ export default function Game() {
         <p style={{ color: '#8b2020', fontSize: 12.5, textAlign: 'center', marginBottom: 12 }}>{error}</p>
       )}
 
-      <TextArea
-        words={words}
-        origBigram={origBigram}
-        animIdx={animIdx}
-        loading={loading}
-        leftLimit={leftLimit}
-        rightLimit={rightLimit}
-        winner={!!winner}
-        onAddWord={addWord}
-      />
+      {showSuccess && winner ? (
+        <SuccessDialog winner={winner} moveLog={moveLog} date={date} origBigram={origBigram} />
+      ) : (
+        <TextArea
+          words={words}
+          origBigram={origBigram}
+          animIdx={animIdx}
+          loading={loading}
+          leftLimit={leftLimit}
+          rightLimit={rightLimit}
+          winner={!!winner}
+          onAddWord={addWord}
+        />
+      )}
 
       {!winner && (
         <GuessButtons
@@ -169,14 +177,11 @@ export default function Game() {
           confirmedBook={confirmedBook}
           loading={loading}
           onSelectBook={book => { setSelectedBook(book); setSelectedChapter(null); setGuessPhase('chapter') }}
+          onAbout={() => setShowAbout(true)}
         />
       )}
 
       <ProgressLog moveLog={moveLog} booksMeta={booksMeta} />
-
-      {winner && (
-        <SuccessDialog winner={winner} moveLog={moveLog} date={date} />
-      )}
 
       {guessPhase === 'chapter' && selectedBook && (
         <GuessDialog
@@ -193,7 +198,11 @@ export default function Game() {
       )}
 
       {splash && (
-        <GuessAnimation data={splash} onDismiss={() => setSplash(null)} />
+        <GuessAnimation data={splash} onDismiss={() => { setSplash(null); if (splash.isSuccess) setShowSuccess(true) }} />
+      )}
+
+      {showAbout && (
+        <AboutDialog bigram={origBigram} onClose={() => setShowAbout(false)} />
       )}
 
     </div>

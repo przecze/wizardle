@@ -1,6 +1,17 @@
-@keyframes hourglassSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(1080deg); }
+@keyframes hourglassFlip {
+  /* flip 1 */
+  0%   { transform: rotate(0deg);   animation-timing-function: ease-in-out; }
+  22%  { transform: rotate(180deg); }
+  /* pause */
+  33%  { transform: rotate(180deg); animation-timing-function: ease-in-out; }
+  /* flip 2 */
+  55%  { transform: rotate(360deg); }
+  /* pause */
+  66%  { transform: rotate(360deg); animation-timing-function: ease-in-out; }
+  /* flip 3 */
+  88%  { transform: rotate(540deg); }
+  /* final hold */
+  100% { transform: rotate(540deg); }
 }
 
 @keyframes resultReveal {
@@ -66,9 +77,9 @@
   justify-content: center;
 }
 
-.splash-hourglass {
-  display: inline-block;
-  animation: hourglassSpin 1.2s linear both;
+.splash-hourglass-svg {
+  display: block;
+  animation: hourglassFlip 1.5s linear both;
 }
 
 .splash-result {

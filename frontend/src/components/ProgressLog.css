@@ -34,3 +34,13 @@
   font-family: 'Courier New', Courier, monospace;
   white-space: pre-wrap;
 }
+
+.move-log__badge {
+  display: inline-block;
+  background: #f0e8d8;
+  border: 1px solid #c8b89a;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
