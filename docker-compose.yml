@@ -61,13 +61,27 @@ services:
       - localnet
       - nginx-proxy
     environment:
-      VIRTUAL_HOST: wizardle.janczechowski.com
-      LETSENCRYPT_HOST: wizardle.janczechowski.com
+      VIRTUAL_HOST: wizardle.net
+      LETSENCRYPT_HOST: wizardle.net
       DEV_MODE: "false"
       NGINX_ENVSUBST_FILTER: DEV_MODE
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
     depends_on:
       - backend
+    restart: always
+    profiles:
+      - production
+
+  # Redirect wizardle.janczechowski.com → wizardle.net (nginx-proxy handles TLS)
+  janczechowski-redirect:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/wizardle-redirect.conf:/etc/nginx/conf.d/redirect.conf:ro
+    networks:
+      - nginx-proxy
+    environment:
+      VIRTUAL_HOST: wizardle.janczechowski.com
+      LETSENCRYPT_HOST: wizardle.janczechowski.com
     restart: always
     profiles:
       - production

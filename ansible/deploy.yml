@@ -13,7 +13,7 @@
 #
 # 3. NGINX-PROXY INTEGRATION:
 #    - Connects to existing nginx-proxy network (external: true)
-#    - Sets VIRTUAL_HOST=wizardle.janczechowski.com
+#    - Sets VIRTUAL_HOST=wizardle.net
 #    - Does NOT modify /srv/projects/nginx-proxy/ files
 #
 # 4. DOCKER COMMANDS: Only these docker operations are performed:
@@ -74,7 +74,7 @@
 
     - name: Start containers (production profile)
       ansible.builtin.shell: |
-        cd {{ project_dir }} && docker compose --profile production up -d --force-recreate --remove-orphans backend site
+        cd {{ project_dir }} && docker compose --profile production up -d --force-recreate --remove-orphans backend site janczechowski-redirect
       register: docker_result
 
     - name: Show docker compose output
