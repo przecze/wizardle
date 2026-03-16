@@ -10,6 +10,7 @@
 # 2. DATA FILES:
 #    - harry_potter_books.csv: synced only if changed (--checksum)
 #    - preprocessing/bigrams.pkl: synced from local build
+#    - harrypotter.txt / harrypotter.pdf: NEVER copied to server
 #
 # 3. NGINX-PROXY INTEGRATION:
 #    - Connects to existing nginx-proxy network (external: true)
@@ -53,6 +54,11 @@
           - "--exclude=*.backup.*"
           - "--exclude=*_api_key.txt"
           - "--exclude=fragment_context_cache"
+          # Never copy full-text source files to server
+          - "--exclude=harrypotter.txt"
+          - "--exclude=harrypotter.pdf"
+          - "--exclude=preprocessing/harrypotter.txt"
+          - "--exclude=preprocessing/harrypotter.pdf"
           # Large source CSV - use checksum to skip if unchanged
           - "--checksum"
 
