@@ -64,3 +64,43 @@
   70%  { opacity: 1; }
   100% { opacity: 0; }
 }
+
+.success-dialog__reset {
+  margin-top: 12px;
+  text-align: right;
+}
+
+.success-dialog__reset-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: #888;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.success-dialog__reset-link:hover {
+  color: #555;
+}
+
+.success-dialog__reset-confirm {
+  font-size: 12px;
+  color: #888;
+}
+
+.success-dialog__reset-yes,
+.success-dialog__reset-cancel {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: #888;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.success-dialog__reset-yes:hover,
+.success-dialog__reset-cancel:hover {
+  color: #555;
+}

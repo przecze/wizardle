@@ -35,6 +35,15 @@
   white-space: pre-wrap;
 }
 
+@keyframes logEntryReveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+.move-log__entry--new {
+  animation: logEntryReveal 0.45s steps(28, end) both;
+}
+
 .move-log__badge {
   display: inline-block;
   background: #f0e8d8;
@@ -42,5 +51,12 @@
   border-radius: 3px;
   padding: 0 5px;
   font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.move-log__chapter {
+  font-family: 'Palatino Linotype', Palatino, Georgia, serif;
+  font-style: italic;
+  color: #5a4a35;
   white-space: nowrap;
 }

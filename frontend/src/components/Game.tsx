@@ -13,8 +13,38 @@ import './Game.css'
 
 type GuessPhase = 'idle' | 'chapter'
 
+interface PersistedState {
+  words: string[]
+  origBigram: string[]
+  moveLog: MoveEntry[]
+  winner: GuessAnswer | null
+  showSuccess: boolean
+  leftLimit: boolean
+  rightLimit: boolean
+  ruledOutBooks: string[]
+  confirmedBook: string | null
+}
+
+function storageKey(date: string) { return `wizardle_${date}` }
+
+function loadSaved(date: string): PersistedState | null {
+  try {
+    const raw = localStorage.getItem(storageKey(date))
+    return raw ? (JSON.parse(raw) as PersistedState) : null
+  } catch { return null }
+}
+
+function saveState(date: string, s: PersistedState) {
+  try { localStorage.setItem(storageKey(date), JSON.stringify(s)) } catch { /* quota */ }
+}
+
+function clearSaved(date: string) {
+  localStorage.removeItem(storageKey(date))
+}
+
 export default function Game() {
   const [date, setDate] = useState<string>(todayStr)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [words, setWords] = useState<string[]>([])
   const [origBigram, setOrigBigram] = useState<string[]>([])
   const [booksMeta, setBooksMeta] = useState<Record<string, BookMeta>>({})
@@ -29,6 +59,7 @@ export default function Game() {
   const [winner, setWinner] = useState<GuessAnswer | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [moveLog, setMoveLog] = useState<MoveEntry[]>([])
+  const [pendingMove, setPendingMove] = useState<MoveEntry | null>(null)
   const [splash, setSplash] = useState<SplashData | null>(null)
 
   const [ruledOutBooks, setRuledOutBooks] = useState<Set<string>>(new Set())
@@ -41,19 +72,50 @@ export default function Game() {
   const [loading, setLoading] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
 
+  // Persist gameplay state whenever it changes (skip until puzzle is loaded)
+  useEffect(() => {
+    if (origBigram.length === 0) return
+    saveState(date, {
+      words, origBigram, moveLog, winner, showSuccess,
+      leftLimit, rightLimit,
+      ruledOutBooks: [...ruledOutBooks],
+      confirmedBook,
+    })
+  }, [date, words, origBigram, moveLog, winner, showSuccess, leftLimit, rightLimit, ruledOutBooks, confirmedBook])
+
   useEffect(() => {
     setLoading(true)
     apiFetch<PuzzleResponse>(`/puzzle?date=${date}`)
       .then(data => {
-        setWords(data.words)
-        setOrigBigram(data.words)
         setBooks(data.books)
         setBooksMeta(data.books_meta)
         setAnimIdx(null)
+        const saved = loadSaved(date)
+        if (saved) {
+          setWords(saved.words)
+          setOrigBigram(saved.origBigram)
+          setMoveLog(saved.moveLog)
+          setWinner(saved.winner)
+          setShowSuccess(saved.showSuccess)
+          setLeftLimit(saved.leftLimit)
+          setRightLimit(saved.rightLimit)
+          setRuledOutBooks(new Set(saved.ruledOutBooks))
+          setConfirmedBook(saved.confirmedBook)
+        } else {
+          setWords(data.words)
+          setOrigBigram(data.words)
+          setMoveLog([])
+          setWinner(null)
+          setShowSuccess(false)
+          setLeftLimit(false)
+          setRightLimit(false)
+          setRuledOutBooks(new Set())
+          setConfirmedBook(null)
+        }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [date])
+  }, [date, refreshKey])
 
   const addWord = useCallback(async (direction: 'left' | 'right') => {
     if (loading) return
@@ -98,14 +160,14 @@ export default function Game() {
       const chName = booksMeta[selectedBook]?.chapter_names[selectedChapter] || selectedChapter
       const emoji = data.correct ? '💫' : data.book_correct ? '📚' : '❌'
       const resultLabel = data.correct ? 'Correct!' : data.book_correct ? 'Right book, wrong chapter' : 'Wrong book'
-      setMoveLog(prev => [...prev, {
+      setPendingMove({
         kind: 'guess',
         book: selectedBook,
         chapter: selectedChapter,
         chapterName: chName,
         correct: data.correct,
         bookCorrect: data.correct || !!data.book_correct,
-      }])
+      })
       setSplash({ book: selectedBook, chapterName: chName, emoji, resultLabel, isSuccess: data.correct })
       setGuessPhase('idle')
       if (data.correct && data.answer) {
@@ -132,8 +194,8 @@ export default function Game() {
     const next = d.toISOString().slice(0, 10)
     if (next > todayStr()) return
     setDate(next)
-    setWords([])
     setOrigBigram([])
+    setWords([])
     setMoveLog([])
     setWinner(null)
     setShowSuccess(false)
@@ -147,6 +209,24 @@ export default function Game() {
     setError(null)
   }
 
+  function handleReset() {
+    clearSaved(date)
+    setOrigBigram([])
+    setWords([])
+    setMoveLog([])
+    setWinner(null)
+    setShowSuccess(false)
+    setLeftLimit(false)
+    setRightLimit(false)
+    setGuessPhase('idle')
+    setSelectedBook(null)
+    setSelectedChapter(null)
+    setRuledOutBooks(new Set())
+    setConfirmedBook(null)
+    setError(null)
+    setRefreshKey(k => k + 1)
+  }
+
   return (
     <div className="game">
 
@@ -157,7 +237,7 @@ export default function Game() {
       )}
 
       {showSuccess && winner ? (
-        <SuccessDialog winner={winner} moveLog={moveLog} date={date} origBigram={origBigram} />
+        <SuccessDialog winner={winner} moveLog={moveLog} date={date} origBigram={origBigram} onReset={handleReset} />
       ) : (
         <TextArea
           words={words}
@@ -199,7 +279,11 @@ export default function Game() {
       )}
 
       {splash && (
-        <GuessAnimation data={splash} onDismiss={() => { setSplash(null); if (splash.isSuccess) setShowSuccess(true) }} />
+        <GuessAnimation data={splash} onDismiss={() => {
+          if (pendingMove) { setMoveLog(prev => [...prev, pendingMove]); setPendingMove(null) }
+          setSplash(null)
+          if (splash.isSuccess) setShowSuccess(true)
+        }} />
       )}
 
       {showAbout && (

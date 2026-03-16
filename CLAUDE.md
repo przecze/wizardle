@@ -116,3 +116,9 @@ Single `nginx.conf.template` with `DEV_MODE` env var:
 | `site` | `:3080` | Prod: built frontend + API proxy (profile=production) |
 
 Note: port 8080 is taken by Cursor IDE locally — use 8090 for dev nginx.
+
+# User notes
+after any frontend changes -> docker compose run --rm tester
+
+also please follow code quality guidelines from refactor.md
+
