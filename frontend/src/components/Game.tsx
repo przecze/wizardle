@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BookMeta, PuzzleResponse, WordResponse, GuessResponse, GuessAnswer, MoveEntry, SplashData } from '../types'
+import { BookMeta, PuzzleResponse, WordResponse, GuessResponse, GuessAnswer, MoveEntry, SplashData, FragmentContextResponse } from '../types'
 import { todayStr, apiFetch } from '../utils'
 import TitleBar from './TitleBar'
 import TextArea from './TextArea'
@@ -68,9 +68,32 @@ export default function Game() {
   const [leftLimit, setLeftLimit] = useState(false)
   const [rightLimit, setRightLimit] = useState(false)
 
+  const [fragmentContextText, setFragmentContextText] = useState<string | null>(null)
+  const [fragmentContextModel, setFragmentContextModel] = useState<string | null>(null)
+  const [fragmentContextLoading, setFragmentContextLoading] = useState(false)
+
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
+
+  // Fetch AI fragment context whenever winner is set (fires on new win and on page reload with saved state)
+  useEffect(() => {
+    if (!winner) {
+      setFragmentContextText(null)
+      setFragmentContextModel(null)
+      setFragmentContextLoading(false)
+      return
+    }
+    setFragmentContextLoading(true)
+    apiFetch<FragmentContextResponse>('/fragment-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, book: winner.book, chapter: winner.chapter }),
+    })
+      .then(data => { setFragmentContextText(data.context); setFragmentContextModel(data.model) })
+      .catch(() => { setFragmentContextText(null); setFragmentContextModel(null) })
+      .finally(() => setFragmentContextLoading(false))
+  }, [winner, date])
 
   // Persist gameplay state whenever it changes (skip until puzzle is loaded)
   useEffect(() => {
@@ -237,7 +260,7 @@ export default function Game() {
       )}
 
       {showSuccess && winner ? (
-        <SuccessDialog winner={winner} moveLog={moveLog} date={date} origBigram={origBigram} onReset={handleReset} />
+        <SuccessDialog winner={winner} moveLog={moveLog} date={date} origBigram={origBigram} onReset={handleReset} fragmentContextText={fragmentContextText} fragmentContextModel={fragmentContextModel} fragmentContextLoading={fragmentContextLoading} />
       ) : (
         <TextArea
           words={words}

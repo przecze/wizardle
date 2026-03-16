@@ -31,3 +31,8 @@ harrypotter.txt
 harrypotter.pdf
 preprocessing/chapter_names.json
 preprocessing/chapters/
+
+*_api_key.txt
+
+# Local hint cache
+fragment_context_cache/

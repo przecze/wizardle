@@ -4,6 +4,9 @@ services:
     volumes:
       - ./backend:/app
       - ./preprocessing:/preprocessing:ro
+      - ./fragment_context_cache:/fragment_context_cache
+    secrets:
+      - openrouter_key
     environment:
       - PYTHONUNBUFFERED=1
     networks:
@@ -81,6 +84,10 @@ services:
       - /app/node_modules
     profiles:
       - test
+
+secrets:
+  openrouter_key:
+    file: ./openrouter_prod_api_key.txt
 
 networks:
   localnet:

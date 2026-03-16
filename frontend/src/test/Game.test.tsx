@@ -132,7 +132,7 @@ describe('Game integration tests', () => {
       expect(screen.getByText(/Philosopher's Stone/)).toBeInTheDocument()
     })
     expect(document.querySelector('.success-dialog__chapter')!.textContent).toMatch(/The Boy Who Lived/)
-    expect(screen.getByText(/42\.5% into chapter/)).toBeInTheDocument()
+    expect(screen.getByText(/42\.5% into the chapter/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /share result/i })).toBeInTheDocument()
   })
 
