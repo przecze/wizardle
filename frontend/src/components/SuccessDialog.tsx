@@ -8,6 +8,7 @@ interface Props {
   moveLog: MoveEntry[]
   date: string
   origBigram: string[]
+  onReset: () => void
 }
 
 function ordinal(n: number): string {
@@ -23,8 +24,9 @@ function formatReadableDate(dateStr: string): string {
   return `${months[month - 1]} ${ordinal(day)} ${year}`
 }
 
-export default function SuccessDialog({ winner, moveLog, date, origBigram }: Props) {
+export default function SuccessDialog({ winner, moveLog, date, origBigram, onReset }: Props) {
   const [copied, setCopied] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const chapNum = parseChapterNum(winner.chapter)
   const tokens = winner.context_fragment.split(' ')
@@ -80,6 +82,21 @@ export default function SuccessDialog({ winner, moveLog, date, origBigram }: Pro
           Share result
         </button>
         {copied && <span className="success-dialog__toast">Copied to clipboard!</span>}
+      </div>
+
+      <div className="success-dialog__reset">
+        {confirmReset ? (
+          <span className="success-dialog__reset-confirm">
+            Reset this day?{' '}
+            <button className="success-dialog__reset-yes" onClick={onReset}>Yes</button>
+            {' / '}
+            <button className="success-dialog__reset-cancel" onClick={() => setConfirmReset(false)}>Cancel</button>
+          </span>
+        ) : (
+          <button className="success-dialog__reset-link" onClick={() => setConfirmReset(true)}>
+            reset
+          </button>
+        )}
       </div>
     </div>
   )
