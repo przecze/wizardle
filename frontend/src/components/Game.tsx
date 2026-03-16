@@ -206,6 +206,12 @@ export default function Game() {
         <AboutDialog bigram={origBigram} onClose={() => setShowAbout(false)} />
       )}
 
+      <footer className="game__footer">
+        Created by <a href="https://janczechowski.com" target="_blank" rel="noopener noreferrer">Jan Czechowski</a>
+        {' | '}
+        <a href="https://github.com/przecze/wizardle" target="_blank" rel="noopener noreferrer">view source on GitHub</a>
+      </footer>
+
     </div>
   )
 }
