@@ -153,7 +153,7 @@ describe('Game integration tests', () => {
     await user.click(screen.getByRole('button', { name: /share result/i }))
 
     expect(writeSpy).toHaveBeenCalledWith(
-      expect.stringContaining('wizardle.janczechowski.com')
+      expect.stringContaining('wizardle.net')
     )
   })
 

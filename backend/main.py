@@ -437,7 +437,7 @@ def _call_deepseek_with_chapter(
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://wizardle.janczechowski.com",
+            "HTTP-Referer": "https://wizardle.net",
             "X-Title": "Wizardle",
         },
         method="POST",

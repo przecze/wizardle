@@ -1,6 +1,6 @@
 # Wizardle
 
-**[Play at wizardle.janczechowski.com](https://wizardle.janczechowski.com)**
+**[Play at wizardle.net](https://wizardle.net)**
 
 A daily puzzle game for hardcore Potterheads. You're shown a two-word fragment from somewhere in the Harry Potter series — can you guess the exact book and chapter?
 
