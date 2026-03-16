@@ -51,8 +51,22 @@
           - "--exclude=ansible"
           - "--exclude=.DS_Store"
           - "--exclude=*.backup.*"
+          - "--exclude=*_api_key.txt"
+          - "--exclude=fragment_context_cache"
           # Large source CSV - use checksum to skip if unchanged
           - "--checksum"
+
+    - name: Copy OpenRouter API key (never synced via rsync)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../openrouter_prod_api_key.txt"
+        dest: "{{ project_dir }}/openrouter_prod_api_key.txt"
+        mode: '0600'
+
+    - name: Ensure fragment context cache directory exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}/fragment_context_cache"
+        state: directory
+        mode: '0755'
 
     - name: Build images (production profile)
       ansible.builtin.shell: |

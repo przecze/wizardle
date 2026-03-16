@@ -12,6 +12,7 @@ TSV format (preprocessing/chapters/bookN_chapNN.tsv):
 import hashlib
 import json
 import re
+import urllib.request
 from pathlib import Path
 from typing import Literal
 
@@ -21,8 +22,23 @@ from pydantic import BaseModel
 
 CHAPTERS_DIR       = Path(__file__).parent.parent / "preprocessing" / "chapters"
 CHAPTER_NAMES_PATH = Path(__file__).parent.parent / "preprocessing" / "chapter_names.json"
-MAX_WORDS_EACH_DIRECTION = 15
-CONTEXT_WORDS_EACH_SIDE  = 20
+FRAGMENT_CONTEXT_CACHE_DIR = Path("/fragment_context_cache")
+OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
+MAX_WORDS_EACH_DIRECTION   = 15
+CONTEXT_WORDS_EACH_SIDE    = 20
+
+FRAGMENT_CONTEXT_MODEL = "deepseek/deepseek-v3.2"
+FRAGMENT_CONTEXT_SYSTEM_PROMPT = (
+    "You are a Harry Potter expert writing a brief context note shown after a player "
+    "correctly identifies a passage in a Harry Potter guessing game.\n\n"
+    "The player has already seen the full text fragment — do not summarise or quote it. "
+    "Write 1–2 short sentences (under 40 words total) that place this moment among the "
+    "chapter's other beats: what just happened or is about to happen, who else is "
+    "involved, what specific detail makes the moment tick. Name names, be concrete.\n\n"
+    "Do NOT explain why the scene is important, what it means thematically, or how it "
+    "connects to larger arcs. No 'this is pivotal because', no 'establishing X for "
+    "later'. Just: where are we in the chapter, what's the texture of this moment."
+)
 
 # Dash/ellipsis tokens skipped when generating bigrams (must match build_chapters.py)
 DASH_TOKENS = {"—", "..."}
@@ -236,6 +252,12 @@ class GuessRequest(BaseModel):
     chapter: str
 
 
+class FragmentContextRequest(BaseModel):
+    date: str
+    book: str
+    chapter: str
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -350,3 +372,128 @@ def submit_guess(req: GuessRequest):
             "bigram_len":       len(mid_tokens),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Fragment context helpers
+# ---------------------------------------------------------------------------
+
+def _build_context_fragment(date_str: str) -> tuple[str, str, str]:
+    """Return (context_fragment, book_name, chapter_name) for a date."""
+    puzzle = _get_puzzle(date_str)
+    tokens = _chapter_tokens(puzzle["file_path"])
+    orig_pos = puzzle["start_pos"]
+
+    left_tokens: list[str] = []
+    pos = orig_pos - 1
+    nd_count = 0
+    while pos >= 0 and nd_count < CONTEXT_WORDS_EACH_SIDE:
+        if tokens[pos] not in DASH_TOKENS:
+            nd_count += 1
+        left_tokens.insert(0, tokens[pos])
+        pos -= 1
+
+    mid_tokens = tokens[orig_pos: orig_pos + 2]
+
+    right_tokens: list[str] = []
+    pos = orig_pos + 2
+    nd_count = 0
+    while pos < len(tokens) and nd_count < CONTEXT_WORDS_EACH_SIDE:
+        if tokens[pos] not in DASH_TOKENS:
+            nd_count += 1
+        right_tokens.append(tokens[pos])
+        pos += 1
+
+    fragment = " ".join(left_tokens + mid_tokens + right_tokens)
+    return fragment, puzzle["book"], puzzle["chapter_name"]
+
+
+def _call_deepseek_with_chapter(
+    fragment: str, book: str, chapter_name: str, full_chapter_text: str
+) -> str:
+    """Call DeepSeek with full chapter text included."""
+    api_key = OPENROUTER_KEY_PATH.read_text().strip()
+    user_msg = (
+        f'Book: {book}\n'
+        f'Chapter: {chapter_name}\n'
+        f'Fragment: "{fragment}"\n'
+        f'Full chapter text: {full_chapter_text}\n\n'
+        f'Context note (1–2 short sentences, under 40 words):'
+    )
+
+    payload = json.dumps({
+        "model": FRAGMENT_CONTEXT_MODEL,
+        "messages": [
+            {"role": "system", "content": FRAGMENT_CONTEXT_SYSTEM_PROMPT},
+            {"role": "user",   "content": user_msg},
+        ],
+        "max_tokens": 200,
+        "temperature": 0.3,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://wizardle.janczechowski.com",
+            "X-Title": "Wizardle",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        body = json.loads(resp.read())
+
+    return body["choices"][0]["message"]["content"].strip()
+
+
+# ---------------------------------------------------------------------------
+# /fragment-context endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/fragment-context")
+def get_fragment_context(req: FragmentContextRequest):
+    """
+    Return an AI-generated context note for the day's puzzle fragment.
+    Requires the correct book + chapter (from /guess success) as proof of win.
+    Result is cached per date so the model is only called once per day.
+    """
+    logger.info(f"POST /fragment-context date={req.date}")
+
+    # Verify book + chapter match ground truth (proof of win)
+    try:
+        puzzle = _get_puzzle(req.date)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if req.book != puzzle["book"] or req.chapter != puzzle["chapter"]:
+        raise HTTPException(status_code=403, detail="Incorrect book or chapter")
+
+    try:
+        expected_fragment, book, chapter_name = _build_context_fragment(req.date)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Return cached result if available
+    FRAGMENT_CONTEXT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = FRAGMENT_CONTEXT_CACHE_DIR / f"{req.date}.txt"
+    if cache_file.exists():
+        logger.info(f"Fragment context cache hit for {req.date}")
+        return {"context": cache_file.read_text(encoding="utf-8"), "model": FRAGMENT_CONTEXT_MODEL, "cached": True}
+
+    # Fetch full chapter text for the model
+    full_chapter_text = " ".join(_chapter_tokens(puzzle["file_path"]))
+
+    try:
+        context = _call_deepseek_with_chapter(
+            expected_fragment, book, chapter_name, full_chapter_text
+        )
+    except Exception as e:
+        logger.error(f"DeepSeek call failed: {e}")
+        raise HTTPException(status_code=502, detail=f"AI fragment context unavailable: {e}")
+
+    cache_file.write_text(context, encoding="utf-8")
+    logger.info(f"Fragment context generated and cached for {req.date}")
+
+    return {"context": context, "model": FRAGMENT_CONTEXT_MODEL, "cached": False}

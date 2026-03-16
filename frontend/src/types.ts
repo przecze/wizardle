@@ -42,3 +42,9 @@ export interface SplashData {
   resultLabel: string
   isSuccess?: boolean
 }
+
+export interface FragmentContextResponse {
+  context: string
+  model: string
+  cached: boolean
+}
