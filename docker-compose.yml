@@ -69,6 +69,19 @@ services:
     profiles:
       - production
 
+  # Frontend tests: docker compose --profile test run --rm tester
+  tester:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: test
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/vitest.config.ts:/app/vitest.config.ts
+      - /app/node_modules
+    profiles:
+      - test
+
 networks:
   localnet:
   nginx-proxy:

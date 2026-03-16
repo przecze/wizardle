@@ -19,7 +19,7 @@ export default function AboutDialog({ bigram, onClose }: Props) {
             These two words appear together <strong>exactly once</strong> in the whole Harry Potter books series.
           </p>
           <p>
-            Can you guess the <strong>exact chapter</strong>?
+            Can you remember the <strong>exact chapter</strong>?
           </p>
           <p>
             If you need a <strong>hint</strong> you can reveal additional words
