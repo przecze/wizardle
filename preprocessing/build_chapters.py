@@ -95,13 +95,25 @@ def fix_split_letter(line: str, chapter_title: str) -> str:
 
 DASH_TOKENS  = {"—", "..."}   # standalone tokens skipped in bigrams
 ELLIPSIS     = "..."
-PREFIX_CHARS = set("`([\u201c")
-SUFFIX_CHARS = set(",;.?!:)]\u201d\u00a8\u2019\u0027")
+PREFIX_CHARS = set('"`([\u201c')
+SUFFIX_CHARS = set(',;.?!:)]\u201d\u00a8\u2019\u0027"')
 _DASH_RE     = re.compile(r'(\u2014)')  # only split on em-dash; hyphens stay in word
 
 
 def _is_period_only(t: str) -> bool:
     return bool(t) and all(c == '.' for c in t)
+
+
+# Opening delimiters that can precede an ELLIPSIS and should absorb the following word
+_OPENING_DELIMS = set('"`(\u201c\u2018')
+
+
+def _is_suffix_token(t: str) -> bool:
+    return bool(t) and all(c in SUFFIX_CHARS for c in t)
+
+
+def _is_opening_delimiter(t: str) -> bool:
+    return bool(t) and all(c in _OPENING_DELIMS for c in t)
 
 
 def split_chunk(chunk: str) -> list[str]:
@@ -167,7 +179,38 @@ def tokenize_text(text: str) -> list[str]:
             merged[-1] = merged[-1] + tok
         else:
             merged.append(tok)
-    return merged
+
+    # Attach ELLIPSIS to adjacent word tokens, absorbing surrounding punctuation.
+    # Cases:
+    #   word . . ."  →  word..."   (ellipsis + closing quote merged into preceding word)
+    #   " . . . word →  "...word   (opening delimiter + ellipsis merged with following word)
+    result: list[str] = []
+    i = 0
+    while i < len(merged):
+        tok = merged[i]
+        if tok == ELLIPSIS and result and result[-1] not in DASH_TOKENS:
+            prev = result[-1]
+            # Don't attach to pure suffix punctuation (e.g. stray comma) unless it's
+            # an opening delimiter like "
+            if _is_suffix_token(prev) and not _is_opening_delimiter(prev):
+                result.append(tok)
+                i += 1
+                continue
+            combined = prev + ELLIPSIS
+            i += 1
+            # Opening delimiter (e.g. ") before ellipsis: pull in the following word too
+            if _is_opening_delimiter(prev) and i < len(merged) and merged[i] not in DASH_TOKENS and merged[i] != ELLIPSIS:
+                combined += merged[i]
+                i += 1
+            # Absorb any following suffix chars (closing quote, period, etc.)
+            while i < len(merged) and _is_suffix_token(merged[i]):
+                combined += merged[i]
+                i += 1
+            result[-1] = combined
+        else:
+            result.append(tok)
+            i += 1
+    return result
 
 
 # ── TXT → chapters ─────────────────────────────────────────────────────────────

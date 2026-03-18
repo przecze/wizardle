@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 CHAPTERS_DIR       = Path(__file__).parent.parent / "preprocessing" / "chapters"
 CHAPTER_NAMES_PATH = Path(__file__).parent.parent / "preprocessing" / "chapter_names.json"
+PUZZLE_OVERRIDES_PATH = Path(__file__).parent / "daily_puzzle_position_overrides.json"
 FRAGMENT_CONTEXT_CACHE_DIR = Path("/fragment_context_cache")
 OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
 MAX_WORDS_EACH_DIRECTION   = 15
@@ -126,7 +127,59 @@ def _get_puzzle(date_str: str) -> dict:
       2. Load that chapter's TSV.
       3. Use seed to select one valid_start=1 position within the chapter.
       4. Derive word1 and word2 (next non-dash token after word1).
+
+    If daily_puzzle_position_overrides.json contains an entry for date_str,
+    the chapter file and start_pos from that entry are used directly instead
+    of the seeding logic.
     """
+    # Check for manual override (used when token IDs shift after reprocessing)
+    if PUZZLE_OVERRIDES_PATH.exists():
+        with open(PUZZLE_OVERRIDES_PATH, encoding="utf-8") as f:
+            overrides = json.load(f)
+        if date_str in overrides:
+            ov = overrides[date_str]
+            chosen_file = CHAPTERS_DIR / ov["chapter_file"]
+            rows = _load_chapter_tsv(chosen_file)
+            start_pos = ov["start_pos"]
+            m = re.match(r"book(\d+)_chap(\d+)\.tsv$", chosen_file.name)
+            if not m:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Bad filename in override: {chosen_file.name}",
+                )
+            book_num = int(m.group(1))
+            chap_num = int(m.group(2))
+            book_name = BOOK_NAMES[book_num - 1]
+            chapter_id = f"chap-{chap_num}"
+            word1 = rows[start_pos][1]
+            word2 = None
+            for j in range(start_pos + 1, len(rows)):
+                if rows[j][1] not in DASH_TOKENS:
+                    word2 = rows[j][1]
+                    break
+            if word2 is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not find word2 for overridden puzzle",
+                )
+            chapter_name = (
+                _get_books_meta()
+                .get(book_name, {})
+                .get("chapter_names", {})
+                .get(chapter_id, "")
+            )
+            position_pct = round(start_pos / max(len(rows) - 1, 1) * 100, 2)
+            return {
+                "book":         book_name,
+                "chapter":      chapter_id,
+                "chapter_name": chapter_name,
+                "word1":        word1,
+                "word2":        word2,
+                "start_pos":    start_pos,
+                "position_pct": position_pct,
+                "file_path":    chosen_file,
+            }
+
     seed = _date_seed(date_str)
     files = _all_chapter_files()
     if not files:
