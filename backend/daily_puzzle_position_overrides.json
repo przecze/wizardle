@@ -1,0 +1,30 @@
+{
+  "2026-03-12": {
+    "chapter_file": "book6_chap15.tsv",
+    "start_pos": 5170
+  },
+  "2026-03-13": {
+    "chapter_file": "book6_chap09.tsv",
+    "start_pos": 904
+  },
+  "2026-03-14": {
+    "chapter_file": "book6_chap15.tsv",
+    "start_pos": 2903
+  },
+  "2026-03-15": {
+    "chapter_file": "book3_chap05.tsv",
+    "start_pos": 5832
+  },
+  "2026-03-16": {
+    "chapter_file": "book2_chap18.tsv",
+    "start_pos": 3015
+  },
+  "2026-03-17": {
+    "chapter_file": "book5_chap14.tsv",
+    "start_pos": 1166
+  },
+  "2026-03-18": {
+    "chapter_file": "book1_chap13.tsv",
+    "start_pos": 2470
+  }
+}
