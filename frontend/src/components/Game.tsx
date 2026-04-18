@@ -74,7 +74,8 @@ export default function Game() {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [showAbout, setShowAbout] = useState(false)
+  const [showAbout, setShowAbout] = useState(() => !document.cookie.split(';').some(c => c.trim().startsWith('wizardle_about_seen=')))
+  const [flashHints, setFlashHints] = useState(false)
 
   // Fetch AI fragment context whenever winner is set (fires on new win and on page reload with saved state)
   useEffect(() => {
@@ -270,6 +271,7 @@ export default function Game() {
           leftLimit={leftLimit}
           rightLimit={rightLimit}
           winner={!!winner}
+          flashing={flashHints}
           onAddWord={addWord}
         />
       )}
@@ -280,6 +282,7 @@ export default function Game() {
           ruledOutBooks={ruledOutBooks}
           confirmedBook={confirmedBook}
           loading={loading}
+          flashing={flashHints}
           onSelectBook={book => { setSelectedBook(book); setSelectedChapter(null); setGuessPhase('chapter') }}
           onAbout={() => setShowAbout(true)}
         />
@@ -310,7 +313,12 @@ export default function Game() {
       )}
 
       {showAbout && (
-        <AboutDialog bigram={origBigram} onClose={() => setShowAbout(false)} />
+        <AboutDialog bigram={origBigram} onClose={() => {
+          document.cookie = 'wizardle_about_seen=1; max-age=31536000; path=/'
+          setShowAbout(false)
+          setFlashHints(true)
+          setTimeout(() => setFlashHints(false), 1600)
+        }} />
       )}
 
       <footer className="game__footer">

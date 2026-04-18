@@ -7,11 +7,12 @@ interface Props {
   ruledOutBooks: Set<string>
   confirmedBook: string | null
   loading: boolean
+  flashing: boolean
   onSelectBook: (book: string) => void
   onAbout: () => void
 }
 
-export default function GuessButtons({ books, ruledOutBooks, confirmedBook, loading, onSelectBook, onAbout }: Props) {
+export default function GuessButtons({ books, ruledOutBooks, confirmedBook, loading, flashing, onSelectBook, onAbout }: Props) {
   return (
     <div className="guess-buttons">
       <p className="guess-buttons__label">
@@ -33,7 +34,7 @@ export default function GuessButtons({ books, ruledOutBooks, confirmedBook, load
           const btn = (
             <button
               key={book}
-              className={`guess-btn${isDisabled ? ' guess-btn--disabled' : ''}`}
+              className={`guess-btn${isDisabled ? ' guess-btn--disabled' : ''}${flashing && !isDisabled ? ' flash-hint' : ''}`}
               onClick={() => { if (!isDisabled) onSelectBook(book) }}
               disabled={isDisabled}
               title={title}

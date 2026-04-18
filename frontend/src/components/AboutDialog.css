@@ -10,6 +10,16 @@
   overflow: hidden;
 }
 
+.about-header {
+  font-family: Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c2416;
+  text-align: center;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid #e0d4be;
+}
+
 .about-bigram {
   font-family: 'Courier New', Courier, monospace;
   font-size: 18px;
@@ -17,12 +27,17 @@
   color: #2c2416;
   text-align: center;
   letter-spacing: 0.01em;
-  padding: 22px 24px 18px;
+  padding: 16px 24px 14px;
   border-bottom: 1px solid #e0d4be;
 }
 
+.about-bigram__surround {
+  color: #9a8a72;
+  font-weight: 400;
+}
+
 .about-body {
-  padding: 18px 22px 10px;
+  padding: 16px 22px 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -33,4 +48,42 @@
   font-size: 14px;
   line-height: 1.55;
   color: #4a3c28;
+}
+
+.about-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid #c8b89a;
+  background: #fffdf7;
+  font-family: Georgia, serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5a4a32;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.about-inline-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid #a09080;
+  background: none;
+  font-size: 15px;
+  color: #7a6a52;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.about-good-luck {
+  font-weight: 700;
+  font-style: italic;
+  color: #5a4a32 !important;
 }

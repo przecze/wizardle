@@ -9,6 +9,7 @@ interface Props {
   leftLimit: boolean
   rightLimit: boolean
   winner: boolean
+  flashing: boolean
   onAddWord: (direction: 'left' | 'right') => void
 }
 
@@ -24,7 +25,7 @@ function AnimatedWord({ word }: { word: string }) {
   )
 }
 
-export default function TextArea({ words, origBigram, animIdx, loading, leftLimit, rightLimit, winner, onAddWord }: Props) {
+export default function TextArea({ words, origBigram, animIdx, loading, leftLimit, rightLimit, winner, flashing, onAddWord }: Props) {
   const wordKeys = useRef<Map<number, number>>(new Map())
   const keyCounter = useRef(0)
   const prevAnimIdx = useRef<number | null>(null)
@@ -54,7 +55,7 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
     <div className="text-area">
       {!winner && (
         <button
-          className={`text-area__plus${leftDisabled ? ' text-area__plus--disabled' : ''}`}
+          className={`text-area__plus${leftDisabled ? ' text-area__plus--disabled' : ''}${flashing && !leftDisabled ? ' flash-hint' : ''}`}
           onClick={() => onAddWord('left')}
           disabled={leftDisabled}
           title={leftLimit ? 'Max 15 words can be revealed on either side' : `Add word left (${wordsLeft}/15)`}
@@ -81,7 +82,7 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
 
       {!winner && (
         <button
-          className={`text-area__plus${rightDisabled ? ' text-area__plus--disabled' : ''}`}
+          className={`text-area__plus${rightDisabled ? ' text-area__plus--disabled' : ''}${flashing && !rightDisabled ? ' flash-hint' : ''}`}
           onClick={() => onAddWord('right')}
           disabled={rightDisabled}
           title={rightLimit ? 'Max 15 words can be revealed on either side' : `Add word right (${wordsRight}/15)`}

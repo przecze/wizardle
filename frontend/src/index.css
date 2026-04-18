@@ -67,3 +67,12 @@ body {
 .word-placeholder {
   color: #c8b89a;
 }
+
+@keyframes flash-hint {
+  0%, 100% { opacity: 1; box-shadow: none; }
+  50% { opacity: 0.25; box-shadow: 0 0 8px 2px #c8a050; }
+}
+
+.flash-hint {
+  animation: flash-hint 0.45s ease-in-out 3;
+}
