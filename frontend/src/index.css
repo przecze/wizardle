@@ -9,6 +9,7 @@ body {
   color: #2c2416;
   font-family: 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Shared button styles — used across GuessDialog and SuccessDialog */
