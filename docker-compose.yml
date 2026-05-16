@@ -34,7 +34,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.31.0-alpine
     volumes:
       - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
       - ./nginx/html:/usr/share/nginx/html:ro
@@ -74,7 +74,7 @@ services:
 
   # Redirect wizardle.janczechowski.com → wizardle.net (nginx-proxy handles TLS)
   janczechowski-redirect:
-    image: nginx:alpine
+    image: nginx:1.31.0-alpine
     volumes:
       - ./nginx/wizardle-redirect.conf:/etc/nginx/conf.d/redirect.conf:ro
     networks:
