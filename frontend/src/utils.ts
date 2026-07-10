@@ -32,7 +32,7 @@ export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise
   return res.json() as Promise<T>
 }
 
-function guessEmoji(m: MoveEntry): string {
+function guessEmoji(m: Extract<MoveEntry, { kind: 'guess' }>): string {
   if (m.correct) return '✅'
   if (m.bookCorrect) return '📚'
   return '❌'
