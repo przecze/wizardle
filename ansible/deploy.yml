@@ -80,7 +80,7 @@
 
     - name: Start containers (production profile)
       ansible.builtin.shell: |
-        cd {{ project_dir }} && docker compose --profile production up -d --force-recreate --remove-orphans backend site janczechowski-redirect
+        cd {{ project_dir }} && docker compose --profile production up -d --force-recreate --remove-orphans backend site
       register: docker_result
 
     - name: Show docker compose output

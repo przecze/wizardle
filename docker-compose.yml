@@ -72,20 +72,6 @@ services:
     profiles:
       - production
 
-  # Redirect wizardle.janczechowski.com → wizardle.net (nginx-proxy handles TLS)
-  janczechowski-redirect:
-    image: nginx:1.31.0-alpine
-    volumes:
-      - ./nginx/wizardle-redirect.conf:/etc/nginx/conf.d/redirect.conf:ro
-    networks:
-      - nginx-proxy
-    environment:
-      VIRTUAL_HOST: wizardle.janczechowski.com
-      LETSENCRYPT_HOST: wizardle.janczechowski.com
-    restart: always
-    profiles:
-      - production
-
   # Frontend tests: docker compose --profile test run --rm tester
   tester:
     build:

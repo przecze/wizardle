@@ -133,7 +133,7 @@ describe('Game integration tests', () => {
     })
     expect(document.querySelector('.success-dialog__chapter')!.textContent).toMatch(/The Boy Who Lived/)
     expect(screen.getByText(/42\.5% into the chapter/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /share result/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /copy result/i })).toBeInTheDocument()
   })
 
   it('copies share text to clipboard', async () => {
@@ -145,12 +145,12 @@ describe('Game integration tests', () => {
 
     // Wait for success dialog
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /share result/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /copy result/i })).toBeInTheDocument()
     })
 
     // Spy on clipboard.writeText at the point user-event has set it up
     const writeSpy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
-    await user.click(screen.getByRole('button', { name: /share result/i }))
+    await user.click(screen.getByRole('button', { name: /copy result/i }))
 
     expect(writeSpy).toHaveBeenCalledWith(
       expect.stringContaining('wizardle.net')

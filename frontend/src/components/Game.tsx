@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BookMeta, PuzzleResponse, WordResponse, GuessResponse, GuessAnswer, MoveEntry, SplashData, FragmentContextResponse } from '../types'
-import { todayStr, apiFetch } from '../utils'
+import { todayStr, apiFetch, hasCookie, setCookie } from '../utils'
 import TitleBar from './TitleBar'
 import TextArea from './TextArea'
 import GuessButtons from './GuessButtons'
@@ -9,7 +9,11 @@ import GuessDialog from './GuessDialog'
 import GuessAnimation from './GuessAnimation'
 import SuccessDialog from './SuccessDialog'
 import AboutDialog from './AboutDialog'
+import NewFeatureDialog from './NewFeatureDialog'
 import './Game.css'
+
+const ABOUT_SEEN_KEY = 'wizardle_about_seen'
+const NEW_FEATURE_SEEN_KEY = 'wizardle_new_feature_share_emoji_seen'
 
 type GuessPhase = 'idle' | 'chapter'
 
@@ -74,7 +78,8 @@ export default function Game() {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [showAbout, setShowAbout] = useState(() => !document.cookie.split(';').some(c => c.trim().startsWith('wizardle_about_seen=')))
+  const [showAbout, setShowAbout] = useState(() => !hasCookie(ABOUT_SEEN_KEY))
+  const [showNewFeature, setShowNewFeature] = useState(() => hasCookie(ABOUT_SEEN_KEY) && !hasCookie(NEW_FEATURE_SEEN_KEY))
   const [flashHints, setFlashHints] = useState(false)
 
   // Fetch AI fragment context whenever winner is set (fires on new win and on page reload with saved state)
@@ -314,10 +319,17 @@ export default function Game() {
 
       {showAbout && (
         <AboutDialog bigram={origBigram} onClose={() => {
-          document.cookie = 'wizardle_about_seen=1; max-age=31536000; path=/'
+          setCookie(ABOUT_SEEN_KEY, '1')
           setShowAbout(false)
           setFlashHints(true)
           setTimeout(() => setFlashHints(false), 1600)
+        }} />
+      )}
+
+      {showNewFeature && (
+        <NewFeatureDialog onClose={() => {
+          setCookie(NEW_FEATURE_SEEN_KEY, '1')
+          setShowNewFeature(false)
         }} />
       )}
 

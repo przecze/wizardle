@@ -1,9 +1,9 @@
-FROM python:3.14-slim
+FROM python:3.14.6-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install "uv==0.11.14" && uv pip install --system --no-cache-dir -r requirements.txt
+RUN pip install "uv==0.11.18" && uv pip install --system --no-cache-dir -r requirements.txt
 
 COPY . .
 
