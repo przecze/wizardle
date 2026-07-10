@@ -14,6 +14,7 @@ import './Game.css'
 
 const ABOUT_SEEN_KEY = 'wizardle_about_seen'
 const NEW_FEATURE_SEEN_KEY = 'wizardle_new_feature_share_emoji_seen'
+const MIN_LOADING_DISPLAY_MS = 1000
 
 type GuessPhase = 'idle' | 'chapter'
 
@@ -91,6 +92,7 @@ export default function Game() {
       return
     }
     setFragmentContextLoading(true)
+    const requestStart = Date.now()
     apiFetch<FragmentContextResponse>('/fragment-context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,7 +100,11 @@ export default function Game() {
     })
       .then(data => { setFragmentContextText(data.context); setFragmentContextModel(data.model) })
       .catch(() => { setFragmentContextText(null); setFragmentContextModel(null) })
-      .finally(() => setFragmentContextLoading(false))
+      .finally(() => {
+        const remaining = MIN_LOADING_DISPLAY_MS - (Date.now() - requestStart)
+        if (remaining > 0) setTimeout(() => setFragmentContextLoading(false), remaining)
+        else setFragmentContextLoading(false)
+      })
   }, [winner, date])
 
   // Persist gameplay state whenever it changes (skip until puzzle is loaded)

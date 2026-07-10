@@ -60,6 +60,24 @@ details[open] .success-dialog__fragment-context-summary::after {
   content: ' ▼';
 }
 
+.success-dialog__fragment-context-summary--loading {
+  cursor: default;
+  pointer-events: none;
+}
+
+.success-dialog__fragment-context-summary--loading::after {
+  content: '';
+  display: inline-block;
+  margin-left: 5px;
+  width: 8px;
+  height: 8px;
+  vertical-align: -1px;
+  border: 1.5px solid #d8ccb4;
+  border-top-color: #9a8a72;
+  border-radius: 50%;
+  animation: fragment-context-spin 0.7s linear infinite;
+}
+
 .success-dialog__fragment-context-body {
   margin-top: 8px;
   padding: 8px 12px 4px;
@@ -69,10 +87,8 @@ details[open] .success-dialog__fragment-context-summary::after {
   text-align: left;
 }
 
-.success-dialog__fragment-context-loading {
-  font-size: 13px;
-  color: #9a8a72;
-  font-style: italic;
+@keyframes fragment-context-spin {
+  to { transform: rotate(360deg); }
 }
 
 .success-dialog__fragment-context-text {
