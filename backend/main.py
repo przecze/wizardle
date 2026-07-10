@@ -28,17 +28,19 @@ OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
 MAX_WORDS_EACH_DIRECTION   = 15
 CONTEXT_WORDS_EACH_SIDE    = 20
 
-FRAGMENT_CONTEXT_MODEL = "deepseek/deepseek-v3.2"
+FRAGMENT_CONTEXT_MODEL = "google/gemini-3.5-flash"
 FRAGMENT_CONTEXT_SYSTEM_PROMPT = (
-    "You are a Harry Potter expert writing a brief context note shown after a player "
-    "correctly identifies a passage in a Harry Potter guessing game.\n\n"
+    "You are a Harry Potter books' expert writing a brief context note shown after a player "
+    "correctly guesses a fragment's chapter in a Harry Potter guessing game. "
     "The player has already seen the full text fragment — do not summarise or quote it. "
-    "Write 1–2 short sentences (under 40 words total) that place this moment among the "
-    "chapter's other beats: what just happened or is about to happen, who else is "
-    "involved, what specific detail makes the moment tick. Name names, be concrete.\n\n"
-    "Do NOT explain why the scene is important, what it means thematically, or how it "
-    "connects to larger arcs. No 'this is pivotal because', no 'establishing X for "
-    "later'. Just: where are we in the chapter, what's the texture of this moment."
+    "Write 1–2 short sentences (under 40 words total)"
+    "It needs to help the reader 'place' the scene. "
+    "Reader only seen this fragment and knows which chapter (number and title) it is. "
+    "If the fragment captures a minor sub-plot or a brief transition, provide the bridging context connecting it to the main events of the chapter, act or book. "
+    "If from fragment alone it's unclear who is speaking, or to who, or who the pronouns refer to or who else is in the scene your note should make it clear. "
+    "Don't say 'this fragment is' or 'this describes' start right away with context / scene explaination"
+    "Example input fragment: ...'re a TOOL' he said and left for upstrairs leaving him alone in the classrom... "
+    "Example good context note: Harry argues with Ron during potions class before he leaves for his first private lesson with Dumbledore"
 )
 
 # Dash/ellipsis tokens skipped when generating bigrams (must match build_chapters.py)
@@ -461,7 +463,7 @@ def _build_context_fragment(date_str: str) -> tuple[str, str, str]:
     return fragment, puzzle["book"], puzzle["chapter_name"]
 
 
-def _call_deepseek_with_chapter(
+def _call_llm_with_chapter(
     fragment: str, book: str, chapter_name: str, full_chapter_text: str
 ) -> str:
     """Call DeepSeek with full chapter text included."""
@@ -539,7 +541,7 @@ def get_fragment_context(req: FragmentContextRequest):
     full_chapter_text = " ".join(_chapter_tokens(puzzle["file_path"]))
 
     try:
-        context = _call_deepseek_with_chapter(
+        context = _call_llm_with_chapter(
             expected_fragment, book, chapter_name, full_chapter_text
         )
     except Exception as e:
