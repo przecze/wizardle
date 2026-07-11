@@ -16,9 +16,11 @@
 #    - Does NOT modify /srv/projects/nginx-proxy/ files
 #
 # 4. DOCKER COMMANDS: Only these docker operations are performed:
-#    - docker compose --profile production build backend site (pre-build)
-#    - docker compose --profile production up -d --force-recreate --remove-orphans backend site
-#    All scoped to /srv/projects/wizardle/docker-compose.yml
+#    - docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production build backend site (pre-build)
+#    - docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d --force-recreate --remove-orphans backend site
+#    All scoped to /srv/projects/wizardle/docker-compose.yml (+ docker-compose.prod.yml overlay:
+#    disables backend --reload and its dev bind mount so prod runs the built image, not a live
+#    host mount, and doesn't pay for the reload watcher subprocess)
 #
 # =============================================================================
 
@@ -71,11 +73,11 @@
 
     - name: Build images (production profile)
       ansible.builtin.shell: |
-        cd {{ project_dir }} && docker compose --profile production build backend site
+        cd {{ project_dir }} && docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production build backend site
 
     - name: Start containers (production profile)
       ansible.builtin.shell: |
-        cd {{ project_dir }} && docker compose --profile production up -d --force-recreate --remove-orphans backend site
+        cd {{ project_dir }} && docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d --force-recreate --remove-orphans backend site
       register: docker_result
 
     - name: Show docker compose output
