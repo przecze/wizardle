@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChapterNamesRaw, PuzzleResponse, WordResponse, GuessResponse, WinnerInfo, MoveEntry, SplashData, FragmentContextResponse } from '../types'
-import { todayStr, apiFetch, buildBooksMeta, chapterTitle, hasCookie, setCookie } from '../utils'
+import { todayStr, apiFetch, parseApiResponse, buildBooksMeta, chapterTitle, hasCookie, setCookie } from '../utils'
 import chapterNamesRaw from '../data/chapter_names.json'
 import TitleBar from './TitleBar'
 import TextArea from './TextArea'
@@ -35,6 +35,25 @@ function storageKey(date: string) { return `wizardle_${date}` }
 function legacyStorageKey(date: string) { return `${storageKey(date)}.legacy` }
 
 const { books: STATIC_BOOKS, booksMeta: STATIC_BOOKS_META } = buildBooksMeta(chapterNamesRaw as ChapterNamesRaw)
+
+declare global {
+  interface Window {
+    // Set by public/prefetch-puzzle.js, which fires before the app bundle even
+    // downloads. Consumed once by fetchPuzzle below.
+    __puzzlePrefetch?: { date: string; promise: Promise<Response> }
+  }
+}
+
+// Adopts the already-in-flight request from prefetch-puzzle.js when its date matches,
+// instead of firing a second one.
+function fetchPuzzle(date: string): Promise<PuzzleResponse> {
+  const boot = window.__puzzlePrefetch
+  if (boot && boot.date === date) {
+    window.__puzzlePrefetch = undefined
+    return boot.promise.then(res => parseApiResponse<PuzzleResponse>(res))
+  }
+  return apiFetch<PuzzleResponse>(`/puzzle?date=${date}`)
+}
 
 // Older localStorage saves stored full book titles and 'chap-N' chapter strings
 // (and a 'context_fragment' field) instead of the current book_num/chapter ids.
@@ -205,7 +224,7 @@ export default function Game() {
 
   useEffect(() => {
     setLoading(true)
-    apiFetch<PuzzleResponse>(`/puzzle?date=${date}`)
+    fetchPuzzle(date)
       .then(data => {
         setAnimIdx(null)
         const saved = loadSaved(date)

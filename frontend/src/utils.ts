@@ -2,6 +2,9 @@ import { BookMeta, ChapterNamesRaw, MoveEntry } from './types'
 
 export const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 
+// Kept in sync (by hand) with the identical inline computation in
+// public/prefetch-puzzle.js, which runs outside the build/type-check pipeline.
+// If this logic changes, update that file too or the prefetch silently stops matching.
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -38,13 +41,17 @@ export function buildBooksMeta(raw: ChapterNamesRaw): { books: string[]; booksMe
   return { books, booksMeta }
 }
 
-export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch('/api' + path, opts)
+export async function parseApiResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`API ${res.status}: ${text}`)
   }
   return res.json() as Promise<T>
+}
+
+export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
+  const res = await fetch('/api' + path, opts)
+  return parseApiResponse<T>(res)
 }
 
 function guessEmoji(m: Extract<MoveEntry, { kind: 'guess' }>): string {

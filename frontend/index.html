@@ -2,6 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- Fires the daily puzzle request immediately, before the (much larger) app
+         bundle below downloads/parses/executes. Game.tsx picks up window.__puzzlePrefetch. -->
+    <script src="/prefetch-puzzle.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="title" content="Wizardle — Daily Chapter Guessing Game" />
     <meta name="description" content="A daily Wordle-inspired guessing game for Potterheads. Identify the book and chapter from just a few minimal words — new puzzle every day!" />
