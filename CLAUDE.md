@@ -31,7 +31,7 @@ curl 'http://127.0.0.1:8090/api/puzzle?date=YYYY-MM-DD'
 curl -X POST http://127.0.0.1:8090/api/word -H 'Content-Type: application/json' \
   -d '{"date":"YYYY-MM-DD","direction":"right","revealed_words":["w1","w2"]}'
 curl -X POST http://127.0.0.1:8090/api/guess -H 'Content-Type: application/json' \
-  -d '{"date":"YYYY-MM-DD","book":"Book N: ...","chapter":"chap-N"}'
+  -d '{"date":"YYYY-MM-DD","book_num":1,"chapter_num":1}'
 
 # Prod site (builds frontend, serves static + API proxy)
 docker compose --profile production up -d --build site   # serves on :3080
@@ -49,7 +49,7 @@ cd backend && make reqs
 
 ### Data flow
 
-`harrypotter.txt` → `preprocessing/build_chapters.py` → `preprocessing/chapters/bookN_chapNN.tsv`
+`input/full_text.txt` + `input/chapter_names.json` (gitignored, local-only) → `preprocessing/build_chapters.py` → `preprocessing/chapters/bookN_chapNN.tsv`
 
 TSV format (tab-separated, no header): `valid_start<TAB>token`
 - `valid_start = 1` if this position starts a unique bigram ≥15 tokens from either chapter boundary; `0` otherwise.
@@ -68,7 +68,7 @@ Date string → SHA-256 → integer seed →
 
 - `GET /puzzle?date=` — returns initial bigram + full books/chapters metadata
 - `POST /word` — `{date, direction, revealed_words[]}` → validates client's revealed_words against ground truth, returns next token; max 15 each direction
-- `POST /guess` — `{date, book, chapter}` → correct/wrong + context fragment on correct
+- `POST /guess` — `{date, book_num, chapter_num}` → correct/wrong + context fragment on correct
 
 ### Tokenization rules (build_chapters.py)
 

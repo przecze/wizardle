@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import { BookMeta, MoveEntry } from '../types'
-import { ROMANS, parseChapterNum } from '../utils'
+import { ROMANS, chapterTitle } from '../utils'
 import './GuessDialog.css'
 
 interface Props {
-  selectedBook: string
-  selectedChapter: string | null
+  selectedBookNum: number
+  selectedChapter: number | null
   books: string[]
   booksMeta: Record<string, BookMeta>
   moveLog: MoveEntry[]
   loading: boolean
-  onSelectChapter: (chapter: string) => void
+  onSelectChapter: (chapter: number) => void
   onClose: () => void
   onSubmit: () => void
 }
@@ -49,26 +49,27 @@ function highlightMatch(name: string, query: string) {
 }
 
 export default function GuessDialog({
-  selectedBook, selectedChapter, books, booksMeta, moveLog, loading,
+  selectedBookNum, selectedChapter, books, booksMeta, moveLog, loading,
   onSelectChapter, onClose, onSubmit,
 }: Props) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const bookIdx = books.indexOf(selectedBook)
+  const bookIdx = selectedBookNum - 1
+  const selectedBook = books[bookIdx]
   const chapters = booksMeta[selectedBook]?.chapters ?? []
   const normQ = normalizeSearch(searchQuery).trim()
   const filtered = normQ
-    ? chapters.filter((ch: string) => normalizeSearch(booksMeta[selectedBook]?.chapter_names[ch] || ch).includes(normQ))
+    ? chapters.filter((ch: number) => normalizeSearch(chapterTitle(booksMeta, selectedBook, ch)).includes(normQ))
     : chapters
 
-  const guessedChapters = new Map<string, string>(
+  const guessedChapters = new Map<number, string>(
     moveLog
-      .filter(m => m.kind === 'guess' && m.book === selectedBook)
+      .filter(m => m.kind === 'guess' && m.book_num === selectedBookNum)
       .map(m => {
         const g = m as Extract<MoveEntry, { kind: 'guess' }>
         const label = g.correct ? 'correct' : g.bookCorrect ? 'right book, wrong chapter' : 'wrong'
-        return [g.chapter, label] as [string, string]
+        return [g.chapter, label] as [number, string]
       })
   )
 
@@ -104,9 +105,8 @@ export default function GuessDialog({
         )}
 
         <div className="chapter-list">
-          {filtered.map((ch: string) => {
-            const name = booksMeta[selectedBook]?.chapter_names[ch] || ch
-            const num = parseChapterNum(ch)
+          {filtered.map((ch: number) => {
+            const name = chapterTitle(booksMeta, selectedBook, ch)
             const guessedResult = guessedChapters.get(ch)
             const isGuessed = guessedResult !== undefined
             return (
@@ -116,7 +116,7 @@ export default function GuessDialog({
                 onClick={() => { if (!isGuessed) onSelectChapter(ch) }}
                 title={isGuessed ? `Already guessed — ${guessedResult}` : undefined}
               >
-                <span className="chapter-num">{num}</span>
+                <span className="chapter-num">{ch}</span>
                 <span className="chapter-name">{highlightMatch(name, searchQuery)}</span>
               </button>
             )

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BookMeta, PuzzleResponse, WordResponse, GuessResponse, GuessAnswer, MoveEntry, SplashData, FragmentContextResponse } from '../types'
-import { todayStr, apiFetch, hasCookie, setCookie } from '../utils'
+import { ChapterNamesRaw, PuzzleResponse, WordResponse, GuessResponse, WinnerInfo, MoveEntry, SplashData, FragmentContextResponse } from '../types'
+import { todayStr, apiFetch, buildBooksMeta, chapterTitle, hasCookie, setCookie } from '../utils'
+import chapterNamesRaw from '../data/chapter_names.json'
 import TitleBar from './TitleBar'
 import TextArea from './TextArea'
 import GuessButtons from './GuessButtons'
@@ -22,25 +23,98 @@ interface PersistedState {
   words: string[]
   origBigram: string[]
   moveLog: MoveEntry[]
-  winner: GuessAnswer | null
+  winner: WinnerInfo | null
   showSuccess: boolean
   leftLimit: boolean
   rightLimit: boolean
-  ruledOutBooks: string[]
-  confirmedBook: string | null
+  ruledOutBooks: number[]
+  confirmedBook: number | null
 }
 
 function storageKey(date: string) { return `wizardle_${date}` }
+function legacyStorageKey(date: string) { return `${storageKey(date)}.legacy` }
 
-function loadSaved(date: string): PersistedState | null {
-  try {
-    const raw = localStorage.getItem(storageKey(date))
-    return raw ? (JSON.parse(raw) as PersistedState) : null
-  } catch { return null }
+const { books: STATIC_BOOKS, booksMeta: STATIC_BOOKS_META } = buildBooksMeta(chapterNamesRaw as ChapterNamesRaw)
+
+// Older localStorage saves stored full book titles and 'chap-N' chapter strings
+// (and a 'context_fragment' field) instead of the current book_num/chapter ids.
+// These helpers recover the ids from whichever shape is on disk.
+function legacyChapterNum(raw: unknown): number {
+  if (typeof raw === 'number') return raw
+  const m = String(raw).match(/(\d+)/)
+  return m ? Number(m[1]) : NaN
+}
+
+function legacyBookNum(raw: unknown): number {
+  if (typeof raw === 'number') return raw
+  return STATIC_BOOKS.indexOf(String(raw)) + 1
+}
+
+function migrateMoveEntry(m: any): MoveEntry {
+  if (m.kind !== 'guess') return m
+  return {
+    kind: 'guess',
+    book_num: legacyBookNum(m.book_num ?? m.book),
+    chapter: legacyChapterNum(m.chapter),
+    correct: m.correct,
+    bookCorrect: m.bookCorrect,
+  }
+}
+
+function migrateWinner(w: any): WinnerInfo | null {
+  if (!w) return null
+  return {
+    book_num: legacyBookNum(w.book_num ?? w.book),
+    chapter: legacyChapterNum(w.chapter),
+    full_fragment: w.full_fragment ?? w.context_fragment ?? '',
+    position_pct: w.position_pct,
+    bigram_start: w.bigram_start,
+    bigram_len: w.bigram_len,
+  }
+}
+
+function isLegacyState(parsed: any): boolean {
+  if (parsed.winner && (!('book_num' in parsed.winner) || 'book' in parsed.winner)) return true
+  if (Array.isArray(parsed.moveLog) && parsed.moveLog.some((m: any) => m.kind === 'guess' && (!('book_num' in m) || typeof m.chapter === 'string'))) return true
+  if (Array.isArray(parsed.ruledOutBooks) && parsed.ruledOutBooks.some((b: any) => typeof b !== 'number')) return true
+  if (parsed.confirmedBook != null && typeof parsed.confirmedBook !== 'number') return true
+  return false
+}
+
+function migratePersistedState(parsed: any): PersistedState {
+  return {
+    words: parsed.words,
+    origBigram: parsed.origBigram,
+    moveLog: (parsed.moveLog ?? []).map(migrateMoveEntry),
+    winner: migrateWinner(parsed.winner),
+    showSuccess: parsed.showSuccess,
+    leftLimit: parsed.leftLimit,
+    rightLimit: parsed.rightLimit,
+    ruledOutBooks: (parsed.ruledOutBooks ?? []).map(legacyBookNum),
+    confirmedBook: parsed.confirmedBook != null ? legacyBookNum(parsed.confirmedBook) : null,
+  }
 }
 
 function saveState(date: string, s: PersistedState) {
   try { localStorage.setItem(storageKey(date), JSON.stringify(s)) } catch { /* quota */ }
+}
+
+function loadSaved(date: string): PersistedState | null {
+  try {
+    const raw = localStorage.getItem(storageKey(date))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!isLegacyState(parsed)) return parsed as PersistedState
+
+    // Preserve the untouched legacy record before overwriting the live key.
+    const legacyKey = legacyStorageKey(date)
+    if (!localStorage.getItem(legacyKey)) {
+      try { localStorage.setItem(legacyKey, raw) } catch { /* quota */ }
+    }
+    const migrated = migratePersistedState(parsed)
+    saveState(date, migrated)
+    return migrated
+  } catch { return null }
 }
 
 function clearSaved(date: string) {
@@ -52,23 +126,23 @@ export default function Game() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [words, setWords] = useState<string[]>([])
   const [origBigram, setOrigBigram] = useState<string[]>([])
-  const [booksMeta, setBooksMeta] = useState<Record<string, BookMeta>>({})
-  const [books, setBooks] = useState<string[]>([])
+  const books = STATIC_BOOKS
+  const booksMeta = STATIC_BOOKS_META
 
   const [animIdx, setAnimIdx] = useState<number | null>(null)
 
   const [guessPhase, setGuessPhase] = useState<GuessPhase>('idle')
-  const [selectedBook, setSelectedBook] = useState<string | null>(null)
-  const [selectedChapter, setSelectedChapter] = useState<string | null>(null)
+  const [selectedBookNum, setSelectedBookNum] = useState<number | null>(null)
+  const [selectedChapter, setSelectedChapter] = useState<number | null>(null)
 
-  const [winner, setWinner] = useState<GuessAnswer | null>(null)
+  const [winner, setWinner] = useState<WinnerInfo | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [moveLog, setMoveLog] = useState<MoveEntry[]>([])
   const [pendingMove, setPendingMove] = useState<MoveEntry | null>(null)
   const [splash, setSplash] = useState<SplashData | null>(null)
 
-  const [ruledOutBooks, setRuledOutBooks] = useState<Set<string>>(new Set())
-  const [confirmedBook, setConfirmedBook] = useState<string | null>(null)
+  const [ruledOutBooks, setRuledOutBooks] = useState<Set<number>>(new Set())
+  const [confirmedBook, setConfirmedBook] = useState<number | null>(null)
 
   const [leftLimit, setLeftLimit] = useState(false)
   const [rightLimit, setRightLimit] = useState(false)
@@ -91,20 +165,31 @@ export default function Game() {
       setFragmentContextLoading(false)
       return
     }
+    let ignore = false
     setFragmentContextLoading(true)
     const requestStart = Date.now()
     apiFetch<FragmentContextResponse>('/fragment-context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, book: winner.book, chapter: winner.chapter }),
+      body: JSON.stringify({ date, book_num: winner.book_num, chapter_num: winner.chapter }),
     })
-      .then(data => { setFragmentContextText(data.context); setFragmentContextModel(data.model) })
-      .catch(() => { setFragmentContextText(null); setFragmentContextModel(null) })
+      .then(data => {
+        if (ignore) return
+        setFragmentContextText(data.context)
+        setFragmentContextModel(data.model)
+      })
+      .catch(() => {
+        if (ignore) return
+        setFragmentContextText(null)
+        setFragmentContextModel(null)
+      })
       .finally(() => {
+        if (ignore) return
         const remaining = MIN_LOADING_DISPLAY_MS - (Date.now() - requestStart)
         if (remaining > 0) setTimeout(() => setFragmentContextLoading(false), remaining)
         else setFragmentContextLoading(false)
       })
+    return () => { ignore = true }
   }, [winner, date])
 
   // Persist gameplay state whenever it changes (skip until puzzle is loaded)
@@ -122,8 +207,6 @@ export default function Game() {
     setLoading(true)
     apiFetch<PuzzleResponse>(`/puzzle?date=${date}`)
       .then(data => {
-        setBooks(data.books)
-        setBooksMeta(data.books_meta)
         setAnimIdx(null)
         const saved = loadSaved(date)
         if (saved) {
@@ -167,12 +250,8 @@ export default function Game() {
         else setRightLimit(true)
       } else {
         const newWord = data.word
-        setWords(prev => {
-          const next = direction === 'left' ? [newWord, ...prev] : [...prev, newWord]
-          const newIdx = direction === 'left' ? 0 : next.length - 1
-          setAnimIdx(newIdx)
-          return next
-        })
+        setWords(prev => direction === 'left' ? [newWord, ...prev] : [...prev, newWord])
+        setAnimIdx(direction === 'left' ? 0 : words.length)
         setMoveLog(prev => [...prev, { kind: 'word', direction, word: newWord }])
       }
     } catch (e) {
@@ -183,37 +262,45 @@ export default function Game() {
   }, [loading, date, words])
 
   const submitGuess = useCallback(async () => {
-    if (!selectedBook || !selectedChapter || loading) return
+    if (!selectedBookNum || !selectedChapter || loading) return
     setLoading(true)
     setError(null)
     try {
       const data = await apiFetch<GuessResponse>('/guess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, book: selectedBook, chapter: selectedChapter }),
+        body: JSON.stringify({
+          date,
+          book_num: selectedBookNum,
+          chapter_num: selectedChapter,
+        }),
       })
-      const chName = booksMeta[selectedBook]?.chapter_names[selectedChapter] || selectedChapter
+      const book = books[selectedBookNum - 1]
+      const chName = chapterTitle(booksMeta, book, selectedChapter)
       const emoji = data.correct ? '💫' : data.book_correct ? '📚' : '❌'
       const resultLabel = data.correct ? 'Correct!' : data.book_correct ? 'Right book, wrong chapter' : 'Wrong book'
       setPendingMove({
         kind: 'guess',
-        book: selectedBook,
+        book_num: selectedBookNum,
         chapter: selectedChapter,
-        chapterName: chName,
         correct: data.correct,
         bookCorrect: data.correct || !!data.book_correct,
       })
-      setSplash({ book: selectedBook, chapterName: chName, emoji, resultLabel, isSuccess: data.correct })
+      setSplash({ book, chapterName: chName, emoji, resultLabel, isSuccess: data.correct })
       setGuessPhase('idle')
       if (data.correct && data.answer) {
-        setWinner(data.answer)
+        setWinner({
+          ...data.answer,
+          book_num: selectedBookNum,
+          chapter: selectedChapter,
+        })
       } else {
         if (data.book_correct) {
-          setConfirmedBook(selectedBook)
+          setConfirmedBook(selectedBookNum)
         } else {
-          setRuledOutBooks(prev => new Set([...prev, selectedBook]))
+          setRuledOutBooks(prev => new Set([...prev, selectedBookNum]))
         }
-        setSelectedBook(null)
+        setSelectedBookNum(null)
         setSelectedChapter(null)
       }
     } catch (e) {
@@ -221,7 +308,7 @@ export default function Game() {
     } finally {
       setLoading(false)
     }
-  }, [selectedBook, selectedChapter, loading, date, booksMeta])
+  }, [selectedBookNum, selectedChapter, loading, date, books, booksMeta])
 
   function navigateDate(delta: -1 | 1) {
     const d = new Date(date)
@@ -237,7 +324,7 @@ export default function Game() {
     setLeftLimit(false)
     setRightLimit(false)
     setGuessPhase('idle')
-    setSelectedBook(null)
+    setSelectedBookNum(null)
     setSelectedChapter(null)
     setRuledOutBooks(new Set())
     setConfirmedBook(null)
@@ -254,7 +341,7 @@ export default function Game() {
     setLeftLimit(false)
     setRightLimit(false)
     setGuessPhase('idle')
-    setSelectedBook(null)
+    setSelectedBookNum(null)
     setSelectedChapter(null)
     setRuledOutBooks(new Set())
     setConfirmedBook(null)
@@ -272,7 +359,7 @@ export default function Game() {
       )}
 
       {showSuccess && winner ? (
-        <SuccessDialog winner={winner} moveLog={moveLog} date={date} origBigram={origBigram} onReset={handleReset} fragmentContextText={fragmentContextText} fragmentContextModel={fragmentContextModel} fragmentContextLoading={fragmentContextLoading} />
+        <SuccessDialog winner={winner} books={books} booksMeta={booksMeta} moveLog={moveLog} date={date} origBigram={origBigram} onReset={handleReset} fragmentContextText={fragmentContextText} fragmentContextModel={fragmentContextModel} fragmentContextLoading={fragmentContextLoading} />
       ) : (
         <TextArea
           words={words}
@@ -294,16 +381,16 @@ export default function Game() {
           confirmedBook={confirmedBook}
           loading={loading}
           flashing={flashHints}
-          onSelectBook={book => { setSelectedBook(book); setSelectedChapter(null); setGuessPhase('chapter') }}
+          onSelectBook={bookNum => { setSelectedBookNum(bookNum); setSelectedChapter(null); setGuessPhase('chapter') }}
           onAbout={() => setShowAbout(true)}
         />
       )}
 
-      <ProgressLog moveLog={moveLog} booksMeta={booksMeta} />
+      <ProgressLog moveLog={moveLog} books={books} booksMeta={booksMeta} />
 
-      {guessPhase === 'chapter' && selectedBook && (
+      {guessPhase === 'chapter' && selectedBookNum && (
         <GuessDialog
-          selectedBook={selectedBook}
+          selectedBookNum={selectedBookNum}
           selectedChapter={selectedChapter}
           books={books}
           booksMeta={booksMeta}

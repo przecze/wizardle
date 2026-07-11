@@ -1,8 +1,9 @@
 """
 Wizardle API — FastAPI backend.
 
-Loads nothing at startup. For each request, reads the relevant chapter TSV
-from preprocessing/chapters/ on demand.
+Loads nothing at startup. Chapter TSVs are read from preprocessing/chapters/
+on demand per request. Books/chapters metadata (chapter_names.json) is read
+once, lazily, on first request and cached in-process for the process lifetime.
 
 TSV format (preprocessing/chapters/bookN_chapNN.tsv):
   valid_start<TAB>token
@@ -13,6 +14,7 @@ import hashlib
 import json
 import re
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -26,7 +28,7 @@ PUZZLE_OVERRIDES_PATH = Path(__file__).parent / "daily_puzzle_position_overrides
 FRAGMENT_CONTEXT_CACHE_DIR = Path("/fragment_context_cache")
 OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
 MAX_WORDS_EACH_DIRECTION   = 15
-CONTEXT_WORDS_EACH_SIDE    = 20
+FRAGMENT_WORDS_EACH_SIDE    = 20
 
 FRAGMENT_CONTEXT_MODEL = "google/gemini-3.5-flash"
 FRAGMENT_CONTEXT_SYSTEM_PROMPT = (
@@ -46,47 +48,50 @@ FRAGMENT_CONTEXT_SYSTEM_PROMPT = (
 # Dash/ellipsis tokens skipped when generating bigrams (must match build_chapters.py)
 DASH_TOKENS = {"—", "..."}
 
-BOOK_NAMES = [
-    "Book 1: Philosopher's Stone",
-    "Book 2: Chamber of Secrets",
-    "Book 3: Prisoner of Azkaban",
-    "Book 4: Goblet of Fire",
-    "Book 5: Order of the Phoenix",
-    "Book 6: Half Blood Prince",
-    "Book 7: Deathly Hallows",
-]
-
 app = FastAPI(title="Wizardle API")
 
 # ---------------------------------------------------------------------------
 # Lazy books metadata (tiny JSON, loaded once on first use)
+#
+# chapter_names.json is the single source of truth for book order + titles:
+#   [{"book": "Book 1: ...", "chapters": {"1": "The Boy Who Lived", ...}}, ...]
 # ---------------------------------------------------------------------------
+_book_names: list[str] | None = None
 _books_meta: dict | None = None
 
 
+def _ensure_books_loaded() -> None:
+    global _book_names, _books_meta
+    if _books_meta is not None:
+        return
+    with open(CHAPTER_NAMES_PATH, encoding="utf-8") as f:
+        entries = json.load(f)
+    _book_names = [entry["book"] for entry in entries]
+    _books_meta = {}
+    for entry in entries:
+        chaps = sorted(int(k) for k in entry["chapters"])
+        chap_names = {int(k): v for k, v in entry["chapters"].items()}
+        _books_meta[entry["book"]] = {"chapters": chaps, "chapter_names": chap_names}
+
+
+def _get_book_names() -> list[str]:
+    _ensure_books_loaded()
+    return _book_names
+
+
 def _get_books_meta() -> dict:
-    global _books_meta
-    if _books_meta is None:
-        with open(CHAPTER_NAMES_PATH, encoding="utf-8") as f:
-            raw = json.load(f)
-        _books_meta = {}
-        for book in BOOK_NAMES:
-            chapters_raw = raw.get(book, {})
-            chaps = [f"chap-{n}" for n in sorted(int(k) for k in chapters_raw)]
-            chap_names = {f"chap-{k}": v for k, v in chapters_raw.items()}
-            _books_meta[book] = {"chapters": chaps, "chapter_names": chap_names}
+    _ensure_books_loaded()
     return _books_meta
+
+
+def _validate_book_num(book_num: int) -> None:
+    if not (1 <= book_num <= len(_get_book_names())):
+        raise HTTPException(status_code=400, detail=f"Invalid book_num: {book_num}")
 
 
 # ---------------------------------------------------------------------------
 # Chapter file helpers
 # ---------------------------------------------------------------------------
-
-def _chap_file(book_name: str, chapter_id: str) -> Path:
-    """Return the TSV path for a given book name and chapter ID like 'chap-3'."""
-    book_num = BOOK_NAMES.index(book_name) + 1
-    chap_num = int(chapter_id.split("-")[1])
-    return CHAPTERS_DIR / f"book{book_num}_chap{chap_num:02d}.tsv"
 
 
 def _load_chapter_tsv(path: Path) -> list[tuple[int, str]]:
@@ -120,7 +125,53 @@ def _date_seed(date_str: str) -> int:
     return int.from_bytes(h[:8], "big")
 
 
-def _get_puzzle(date_str: str) -> dict:
+@dataclass(frozen=True)
+class Puzzle:
+    """The day's puzzle. Numbers only — book/chapter titles are not this
+    layer's concern; the only place that needs them is the AI fragment-context
+    feature, which resolves them itself from book_num/chapter_num."""
+    book_num: int
+    chapter_num: int
+    word1: str
+    word2: str
+    start_pos: int      # token index of word1 in chapter
+    position_pct: float
+    file_path: Path
+
+
+def _build_puzzle(chosen_file: Path, rows: list[tuple[int, str]], start_pos: int) -> Puzzle:
+    """Assemble the Puzzle for a chosen chapter file + start position."""
+    m = re.match(r"book(\d+)_chap(\d+)\.tsv$", chosen_file.name)
+    if not m:
+        raise HTTPException(status_code=500, detail=f"Bad filename: {chosen_file.name}")
+    book_num    = int(m.group(1))
+    chapter_num = int(m.group(2))
+
+    word1 = rows[start_pos][1]
+
+    # Find next non-dash token for word2
+    word2 = None
+    for j in range(start_pos + 1, len(rows)):
+        if rows[j][1] not in DASH_TOKENS:
+            word2 = rows[j][1]
+            break
+    if word2 is None:
+        raise HTTPException(status_code=500, detail="Could not find word2 for puzzle")
+
+    position_pct = round(start_pos / max(len(rows) - 1, 1) * 100, 2)
+
+    return Puzzle(
+        book_num=book_num,
+        chapter_num=chapter_num,
+        word1=word1,
+        word2=word2,
+        start_pos=start_pos,
+        position_pct=position_pct,
+        file_path=chosen_file,
+    )
+
+
+def _get_puzzle(date_str: str) -> Puzzle:
     """
     Deterministically pick a chapter and valid-opener position for a date.
 
@@ -142,45 +193,7 @@ def _get_puzzle(date_str: str) -> dict:
             ov = overrides[date_str]
             chosen_file = CHAPTERS_DIR / ov["chapter_file"]
             rows = _load_chapter_tsv(chosen_file)
-            start_pos = ov["start_pos"]
-            m = re.match(r"book(\d+)_chap(\d+)\.tsv$", chosen_file.name)
-            if not m:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Bad filename in override: {chosen_file.name}",
-                )
-            book_num = int(m.group(1))
-            chap_num = int(m.group(2))
-            book_name = BOOK_NAMES[book_num - 1]
-            chapter_id = f"chap-{chap_num}"
-            word1 = rows[start_pos][1]
-            word2 = None
-            for j in range(start_pos + 1, len(rows)):
-                if rows[j][1] not in DASH_TOKENS:
-                    word2 = rows[j][1]
-                    break
-            if word2 is None:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Could not find word2 for overridden puzzle",
-                )
-            chapter_name = (
-                _get_books_meta()
-                .get(book_name, {})
-                .get("chapter_names", {})
-                .get(chapter_id, "")
-            )
-            position_pct = round(start_pos / max(len(rows) - 1, 1) * 100, 2)
-            return {
-                "book":         book_name,
-                "chapter":      chapter_id,
-                "chapter_name": chapter_name,
-                "word1":        word1,
-                "word2":        word2,
-                "start_pos":    start_pos,
-                "position_pct": position_pct,
-                "file_path":    chosen_file,
-            }
+            return _build_puzzle(chosen_file, rows, ov["start_pos"])
 
     seed = _date_seed(date_str)
     files = _all_chapter_files()
@@ -188,16 +201,6 @@ def _get_puzzle(date_str: str) -> dict:
         raise HTTPException(status_code=500, detail="No chapter files found")
 
     chosen_file = files[seed % len(files)]
-
-    # Parse book/chapter from filename (e.g. book1_chap03.tsv)
-    m = re.match(r"book(\d+)_chap(\d+)\.tsv$", chosen_file.name)
-    if not m:
-        raise HTTPException(status_code=500, detail=f"Bad filename: {chosen_file.name}")
-    book_num  = int(m.group(1))
-    chap_num  = int(m.group(2))
-    book_name = BOOK_NAMES[book_num - 1]
-    chapter_id = f"chap-{chap_num}"
-
     rows = _load_chapter_tsv(chosen_file)
     valid_positions = [i for i, (flag, _) in enumerate(rows) if flag == 1]
 
@@ -210,36 +213,7 @@ def _get_puzzle(date_str: str) -> dict:
     inner_seed = seed // len(files)
     start_pos = valid_positions[inner_seed % len(valid_positions)]
 
-    word1 = rows[start_pos][1]
-
-    # Find next non-dash token for word2
-    word2 = None
-    for j in range(start_pos + 1, len(rows)):
-        if rows[j][1] not in DASH_TOKENS:
-            word2 = rows[j][1]
-            break
-
-    if word2 is None:
-        raise HTTPException(status_code=500, detail="Could not find word2 for puzzle")
-
-    chapter_name = (
-        _get_books_meta()
-        .get(book_name, {})
-        .get("chapter_names", {})
-        .get(chapter_id, "")
-    )
-    position_pct = round(start_pos / max(len(rows) - 1, 1) * 100, 2)
-
-    return {
-        "book":         book_name,
-        "chapter":      chapter_id,
-        "chapter_name": chapter_name,
-        "word1":        word1,
-        "word2":        word2,
-        "start_pos":    start_pos,   # token index of word1 in chapter
-        "position_pct": position_pct,
-        "file_path":    chosen_file,
-    }
+    return _build_puzzle(chosen_file, rows, start_pos)
 
 
 # ---------------------------------------------------------------------------
@@ -303,14 +277,14 @@ class WordRequest(BaseModel):
 
 class GuessRequest(BaseModel):
     date: str
-    book: str
-    chapter: str
+    book_num: int
+    chapter_num: int
 
 
 class FragmentContextRequest(BaseModel):
     date: str
-    book: str
-    chapter: str
+    book_num: int
+    chapter_num: int
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +293,7 @@ class FragmentContextRequest(BaseModel):
 
 @app.get("/puzzle")
 def get_puzzle(date: str):
-    """Return the initial 2-word bigram for a given date plus books metadata."""
+    """Return the initial 2-word bigram for a given date."""
     logger.info(f"GET /puzzle date={date}")
     try:
         puzzle = _get_puzzle(date)
@@ -328,12 +302,9 @@ def get_puzzle(date: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    books_meta = _get_books_meta()
     return {
-        "date":       date,
-        "words":      [puzzle["word1"], puzzle["word2"]],
-        "books":      list(books_meta.keys()),
-        "books_meta": books_meta,
+        "date":  date,
+        "words": [puzzle.word1, puzzle.word2],
     }
 
 
@@ -342,7 +313,7 @@ def get_next_word(req: WordRequest):
     """Return the next word to reveal (left or right)."""
     logger.info(f"POST /word date={req.date} dir={req.direction}")
     puzzle = _get_puzzle(req.date)
-    tokens = _chapter_tokens(puzzle["file_path"])
+    tokens = _chapter_tokens(puzzle.file_path)
 
     start_pos = _find_token_positions(tokens, req.revealed_words)
     if start_pos is None:
@@ -351,7 +322,7 @@ def get_next_word(req: WordRequest):
             detail="revealed_words do not match puzzle for this date",
         )
 
-    orig_pos = puzzle["start_pos"]
+    orig_pos = puzzle.start_pos
 
     if req.direction == "left":
         non_dash_added = sum(
@@ -376,26 +347,12 @@ def get_next_word(req: WordRequest):
     return {"word": new_word, "limit_reached": False}
 
 
-@app.post("/guess")
-def submit_guess(req: GuessRequest):
-    """Check if the guess (book + chapter) is correct for the date."""
-    logger.info(f"POST /guess date={req.date} book={req.book!r} chapter={req.chapter!r}")
-    puzzle = _get_puzzle(req.date)
-
-    correct      = req.book == puzzle["book"] and req.chapter == puzzle["chapter"]
-    book_correct = req.book == puzzle["book"]
-
-    if not correct:
-        return {"correct": False, "book_correct": book_correct, "answer": None}
-
-    tokens   = _chapter_tokens(puzzle["file_path"])
-    orig_pos = puzzle["start_pos"]
-
-    # Collect up to CONTEXT_WORDS_EACH_SIDE non-dash tokens in each direction
+def _fragment_window(tokens: list[str], orig_pos: int) -> tuple[list[str], list[str], list[str]]:
+    """Collect up to FRAGMENT_WORDS_EACH_SIDE non-dash tokens on each side of the bigram at orig_pos."""
     left_tokens: list[str] = []
     pos = orig_pos - 1
     nd_count = 0
-    while pos >= 0 and nd_count < CONTEXT_WORDS_EACH_SIDE:
+    while pos >= 0 and nd_count < FRAGMENT_WORDS_EACH_SIDE:
         if tokens[pos] not in DASH_TOKENS:
             nd_count += 1
         left_tokens.insert(0, tokens[pos])
@@ -406,25 +363,41 @@ def submit_guess(req: GuessRequest):
     right_tokens: list[str] = []
     pos = orig_pos + 2
     nd_count = 0
-    while pos < len(tokens) and nd_count < CONTEXT_WORDS_EACH_SIDE:
+    while pos < len(tokens) and nd_count < FRAGMENT_WORDS_EACH_SIDE:
         if tokens[pos] not in DASH_TOKENS:
             nd_count += 1
         right_tokens.append(tokens[pos])
         pos += 1
 
-    context = left_tokens + mid_tokens + right_tokens
+    return left_tokens, mid_tokens, right_tokens
+
+
+@app.post("/guess")
+def submit_guess(req: GuessRequest):
+    """Check if the guess (book + chapter) is correct for the date."""
+    logger.info(f"POST /guess date={req.date} book_num={req.book_num} chapter_num={req.chapter_num}")
+    _validate_book_num(req.book_num)
+    puzzle = _get_puzzle(req.date)
+
+    correct      = req.book_num == puzzle.book_num and req.chapter_num == puzzle.chapter_num
+    book_correct = req.book_num == puzzle.book_num
+
+    if not correct:
+        return {"correct": False, "book_correct": book_correct, "answer": None}
+
+    tokens   = _chapter_tokens(puzzle.file_path)
+    orig_pos = puzzle.start_pos
+    left_tokens, mid_tokens, right_tokens = _fragment_window(tokens, orig_pos)
+    fragment_tokens = left_tokens + mid_tokens + right_tokens
 
     return {
         "correct":      True,
         "book_correct": True,
         "answer": {
-            "book":             puzzle["book"],
-            "chapter":          puzzle["chapter"],
-            "chapter_name":     puzzle["chapter_name"],
-            "position_pct":     puzzle["position_pct"],
-            "context_fragment": " ".join(context),
-            "bigram_start":     len(left_tokens),
-            "bigram_len":       len(mid_tokens),
+            "full_fragment": " ".join(fragment_tokens),
+            "position_pct":  puzzle.position_pct,
+            "bigram_start":  len(left_tokens),
+            "bigram_len":    len(mid_tokens),
         },
     }
 
@@ -433,45 +406,32 @@ def submit_guess(req: GuessRequest):
 # Fragment context helpers
 # ---------------------------------------------------------------------------
 
-def _build_context_fragment(date_str: str) -> tuple[str, str, str]:
-    """Return (context_fragment, book_name, chapter_name) for a date."""
+def _book_and_chapter_name(book_num: int, chapter_num: int) -> tuple[str, str]:
+    """Resolve titles for the LLM prompt — the only place the backend needs them."""
+    book_name = _get_book_names()[book_num - 1]
+    chapter_name = _get_books_meta().get(book_name, {}).get("chapter_names", {}).get(chapter_num, "")
+    return book_name, chapter_name
+
+
+def _build_full_fragment(date_str: str) -> tuple[str, str, str]:
+    """Return (full_fragment, book_name, chapter_name) for a date."""
     puzzle = _get_puzzle(date_str)
-    tokens = _chapter_tokens(puzzle["file_path"])
-    orig_pos = puzzle["start_pos"]
-
-    left_tokens: list[str] = []
-    pos = orig_pos - 1
-    nd_count = 0
-    while pos >= 0 and nd_count < CONTEXT_WORDS_EACH_SIDE:
-        if tokens[pos] not in DASH_TOKENS:
-            nd_count += 1
-        left_tokens.insert(0, tokens[pos])
-        pos -= 1
-
-    mid_tokens = tokens[orig_pos: orig_pos + 2]
-
-    right_tokens: list[str] = []
-    pos = orig_pos + 2
-    nd_count = 0
-    while pos < len(tokens) and nd_count < CONTEXT_WORDS_EACH_SIDE:
-        if tokens[pos] not in DASH_TOKENS:
-            nd_count += 1
-        right_tokens.append(tokens[pos])
-        pos += 1
-
-    fragment = " ".join(left_tokens + mid_tokens + right_tokens)
-    return fragment, puzzle["book"], puzzle["chapter_name"]
+    tokens = _chapter_tokens(puzzle.file_path)
+    left_tokens, mid_tokens, right_tokens = _fragment_window(tokens, puzzle.start_pos)
+    full_fragment = " ".join(left_tokens + mid_tokens + right_tokens)
+    book_name, chapter_name = _book_and_chapter_name(puzzle.book_num, puzzle.chapter_num)
+    return full_fragment, book_name, chapter_name
 
 
 def _call_llm_with_chapter(
-    fragment: str, book: str, chapter_name: str, full_chapter_text: str
+    full_fragment: str, book: str, chapter_name: str, full_chapter_text: str
 ) -> str:
-    """Call DeepSeek with full chapter text included."""
+    """Call the fragment-context LLM (via OpenRouter) with full chapter text included."""
     api_key = OPENROUTER_KEY_PATH.read_text().strip()
     user_msg = (
         f'Book: {book}\n'
         f'Chapter: {chapter_name}\n'
-        f'Fragment: "{fragment}"\n'
+        f'Fragment: "{full_fragment}"\n'
         f'Full chapter text: {full_chapter_text}\n\n'
         f'Context note (1–2 short sentences, under 40 words):'
     )
@@ -514,7 +474,8 @@ def get_fragment_context(req: FragmentContextRequest):
     Requires the correct book + chapter (from /guess success) as proof of win.
     Result is cached per date so the model is only called once per day.
     """
-    logger.info(f"POST /fragment-context date={req.date}")
+    logger.info(f"POST /fragment-context date={req.date} book_num={req.book_num} chapter_num={req.chapter_num}")
+    _validate_book_num(req.book_num)
 
     # Verify book + chapter match ground truth (proof of win)
     try:
@@ -522,11 +483,11 @@ def get_fragment_context(req: FragmentContextRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    if req.book != puzzle["book"] or req.chapter != puzzle["chapter"]:
+    if req.book_num != puzzle.book_num or req.chapter_num != puzzle.chapter_num:
         raise HTTPException(status_code=403, detail="Incorrect book or chapter")
 
     try:
-        expected_fragment, book, chapter_name = _build_context_fragment(req.date)
+        full_fragment, book, chapter_name = _build_full_fragment(req.date)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -538,14 +499,14 @@ def get_fragment_context(req: FragmentContextRequest):
         return {"context": cache_file.read_text(encoding="utf-8"), "model": FRAGMENT_CONTEXT_MODEL, "cached": True}
 
     # Fetch full chapter text for the model
-    full_chapter_text = " ".join(_chapter_tokens(puzzle["file_path"]))
+    full_chapter_text = " ".join(_chapter_tokens(puzzle.file_path))
 
     try:
         context = _call_llm_with_chapter(
-            expected_fragment, book, chapter_name, full_chapter_text
+            full_fragment, book, chapter_name, full_chapter_text
         )
     except Exception as e:
-        logger.error(f"DeepSeek call failed: {e}")
+        logger.error(f"Fragment-context LLM call failed: {e}")
         raise HTTPException(status_code=502, detail=f"AI fragment context unavailable: {e}")
 
     cache_file.write_text(context, encoding="utf-8")

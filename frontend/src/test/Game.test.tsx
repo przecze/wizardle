@@ -14,6 +14,7 @@ import { apiFetch } from '../utils'
 import Game from '../components/Game'
 import {
   TEST_DATE,
+  MOCK_BOOKS,
   MOCK_PUZZLE,
   MOCK_WORD_LEFT,
   MOCK_WORD_RIGHT,
@@ -155,6 +156,72 @@ describe('Game integration tests', () => {
     expect(writeSpy).toHaveBeenCalledWith(
       expect.stringContaining('wizardle.net')
     )
+  })
+
+  it('migrates a legacy localStorage save (chap-N winner shape) without crashing', async () => {
+    const legacyRaw = JSON.stringify({
+      words: ['dark', 'forest'],
+      origBigram: ['dark', 'forest'],
+      moveLog: [{
+        kind: 'guess', book: MOCK_BOOKS[0], chapter: 'chap-1', chapterName: 'The Boy Who Lived',
+        correct: true, bookCorrect: true,
+      }],
+      winner: {
+        book: MOCK_BOOKS[0],
+        chapter: 'chap-1',
+        chapter_name: 'The Boy Who Lived',
+        position_pct: 42.5,
+        context_fragment: 'into the dark forest and found',
+        bigram_start: 2,
+        bigram_len: 2,
+      },
+      showSuccess: true,
+      leftLimit: false,
+      rightLimit: false,
+      ruledOutBooks: [],
+      confirmedBook: null,
+    })
+    localStorage.setItem(`wizardle_${TEST_DATE}`, legacyRaw)
+
+    render(<Game />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Philosopher's Stone/)).toBeInTheDocument()
+    })
+    expect(document.querySelector('.success-dialog__chapter')!.textContent).toMatch(/The Boy Who Lived/)
+
+    // Original legacy record preserved verbatim under the .legacy key
+    expect(localStorage.getItem(`wizardle_${TEST_DATE}.legacy`)).toBe(legacyRaw)
+
+    // Live key now holds the migrated (ids-only) shape
+    const migrated = JSON.parse(localStorage.getItem(`wizardle_${TEST_DATE}`)!)
+    expect(migrated.winner.book_num).toBe(1)
+    expect(migrated.winner.chapter).toBe(1)
+    expect(migrated.winner.full_fragment).toBe('into the dark forest and found')
+    expect(migrated.winner.book).toBeUndefined()
+    expect(migrated.winner.chapterName).toBeUndefined()
+    expect(migrated.moveLog[0].book_num).toBe(1)
+    expect(migrated.moveLog[0].chapter).toBe(1)
+  })
+
+  it('migrates legacy string-based ruledOutBooks/confirmedBook to book_num ints', async () => {
+    const legacyRaw = JSON.stringify({
+      words: ['dark', 'forest'],
+      origBigram: ['dark', 'forest'],
+      moveLog: [],
+      winner: null,
+      showSuccess: false,
+      leftLimit: false,
+      rightLimit: false,
+      ruledOutBooks: [MOCK_BOOKS[1], MOCK_BOOKS[2]],
+      confirmedBook: null,
+    })
+    localStorage.setItem(`wizardle_${TEST_DATE}`, legacyRaw)
+
+    await renderGame()
+
+    const migrated = JSON.parse(localStorage.getItem(`wizardle_${TEST_DATE}`)!)
+    expect(migrated.ruledOutBooks).toEqual([2, 3])
   })
 
   it('navigates to previous day', async () => {

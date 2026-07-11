@@ -4,11 +4,11 @@ import './GuessButtons.css'
 
 interface Props {
   books: string[]
-  ruledOutBooks: Set<string>
-  confirmedBook: string | null
+  ruledOutBooks: Set<number>
+  confirmedBook: number | null
   loading: boolean
   flashing: boolean
-  onSelectBook: (book: string) => void
+  onSelectBook: (bookNum: number) => void
   onAbout: () => void
 }
 
@@ -21,11 +21,12 @@ export default function GuessButtons({ books, ruledOutBooks, confirmedBook, load
       </p>
       <div className="guess-buttons__grid">
         {books.map((book, i) => {
-          const isRuledOut = ruledOutBooks.has(book)
-          const isLockedOut = confirmedBook !== null && book !== confirmedBook
+          const bookNum = i + 1
+          const isRuledOut = ruledOutBooks.has(bookNum)
+          const isLockedOut = confirmedBook !== null && bookNum !== confirmedBook
           const isDisabled = loading || isRuledOut || isLockedOut
-          const enabledBooks = books.filter(b => !ruledOutBooks.has(b) && (confirmedBook === null || b === confirmedBook))
-          const isLastEnabled = !isDisabled && enabledBooks.length === 1
+          const enabledCount = books.filter((_, j) => !ruledOutBooks.has(j + 1) && (confirmedBook === null || j + 1 === confirmedBook)).length
+          const isLastEnabled = !isDisabled && enabledCount === 1
 
           let title = book
           if (isRuledOut || isLockedOut) title = 'You know the fragment is not from this book'
@@ -35,7 +36,7 @@ export default function GuessButtons({ books, ruledOutBooks, confirmedBook, load
             <button
               key={book}
               className={`guess-btn${isDisabled ? ' guess-btn--disabled' : ''}${flashing && !isDisabled ? ' flash-hint' : ''}`}
-              onClick={() => { if (!isDisabled) onSelectBook(book) }}
+              onClick={() => { if (!isDisabled) onSelectBook(bookNum) }}
               disabled={isDisabled}
               title={title}
             >

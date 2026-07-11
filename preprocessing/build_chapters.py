@@ -6,7 +6,7 @@
 """
 Wizardle preprocessing pipeline (all-in-one).
 
-Reads harrypotter.txt, parses books/chapters with OCR fixes,
+Reads input/full_text.txt, parses books/chapters with OCR fixes,
 tokenizes, computes bigram validity, and writes one TSV per chapter to
 preprocessing/chapters/.
 
@@ -24,27 +24,56 @@ Run with:  uv run preprocessing/build_chapters.py
 
 import re
 import json
-import sys
+import shutil
 import collections
 from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-INPUT_PATH         = Path(__file__).parent.parent / "harrypotter.txt"
-OUTPUT_DIR         = Path(__file__).parent / "chapters"
-CHAPTER_NAMES_PATH = Path(__file__).parent / "chapter_names.json"
+# All raw source material lives under input/ (gitignored as a whole).
+INPUT_DIR                  = Path(__file__).parent.parent / "input"
+INPUT_PATH                 = INPUT_DIR / "full_text.txt"
+CHAPTER_NAMES_INPUT_PATH   = INPUT_DIR / "chapter_names.json"
+
+OUTPUT_DIR                  = Path(__file__).parent / "chapters"
+BACKEND_CHAPTER_NAMES_PATH  = Path(__file__).parent / "chapter_names.json"
+FRONTEND_CHAPTER_NAMES_PATH = Path(__file__).parent.parent / "frontend" / "src" / "data" / "chapter_names.json"
 
 BOUNDARY_MARGIN = 15  # tokens from chapter boundary
 
-# ── Book / chapter header constants (from convert_txt.py) ─────────────────────
-BOOK_NAMES = [
-    "Book 1: Philosopher's Stone",
-    "Book 2: Chamber of Secrets",
-    "Book 3: Prisoner of Azkaban",
-    "Book 4: Goblet of Fire",
-    "Book 5: Order of the Phoenix",
-    "Book 6: Half Blood Prince",
-    "Book 7: Deathly Hallows",
-]
+# ── Book order / titles ─────────────────────────────────────────────────────
+# input/chapter_names.json is the single source of truth for book order + titles:
+#   [{"book": "Book 1: ...", "chapters": {"1": "The Boy Who Lived", ...}}, ...]
+# Its list order must match the physical book order in input/full_text.txt.
+
+def _load_chapter_names_entries() -> list[dict]:
+    if not CHAPTER_NAMES_INPUT_PATH.exists():
+        raise FileNotFoundError(
+            f"{CHAPTER_NAMES_INPUT_PATH} not found — it provides the canonical book "
+            "order/titles and chapter titles and must exist before running this script."
+        )
+    with open(CHAPTER_NAMES_INPUT_PATH, encoding="utf-8") as f:
+        entries = json.load(f)
+    if not isinstance(entries, list) or not entries:
+        raise ValueError(
+            f"{CHAPTER_NAMES_INPUT_PATH} must contain a non-empty JSON list of "
+            '{"book": ..., "chapters": {...}} entries, got: '
+            f"{type(entries).__name__}"
+        )
+    for entry in entries:
+        if not isinstance(entry, dict) or "book" not in entry or "chapters" not in entry:
+            raise ValueError(
+                f'{CHAPTER_NAMES_INPUT_PATH}: each entry must be an object with "book" '
+                f"and \"chapters\" keys, got: {entry!r}"
+            )
+        if not isinstance(entry["chapters"], dict):
+            raise ValueError(
+                f'{CHAPTER_NAMES_INPUT_PATH}: "chapters" for {entry["book"]!r} must be an '
+                f"object, got: {type(entry['chapters']).__name__}"
+            )
+    return entries
+
+
+BOOK_NAMES = [entry["book"] for entry in _load_chapter_names_entries()]
 
 _ORDINAL_LIST = [
     'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN',
@@ -216,17 +245,14 @@ def tokenize_text(text: str) -> list[str]:
 # ── TXT → chapters ─────────────────────────────────────────────────────────────
 
 def load_chapter_names() -> dict[tuple[str, int], str]:
-    if not CHAPTER_NAMES_PATH.exists():
-        return {}
-    with open(CHAPTER_NAMES_PATH, encoding="utf-8") as f:
-        raw = json.load(f)
-    return {(book, int(chap)): name for book, chapters in raw.items()
-            for chap, name in chapters.items()}
+    return {(entry["book"], int(chap)): name
+            for entry in _load_chapter_names_entries()
+            for chap, name in entry["chapters"].items()}
 
 
 def parse_txt(path: Path) -> list[dict]:
     """
-    Parse harrypotter.txt into a list of chapter dicts:
+    Parse input/full_text.txt into a list of chapter dicts:
       {book_name, book_num, chapter_num, chapter_title, tokens: list[str]}
     """
     CHAPTER_NAMES = load_chapter_names()
@@ -268,8 +294,10 @@ def parse_txt(path: Path) -> list[dict]:
             if chap_num == 1:
                 book_idx += 1
                 if book_idx >= len(BOOK_NAMES):
-                    print("ERROR: more books than expected", file=sys.stderr)
-                    break
+                    raise ValueError(
+                        f"Found start of book #{book_idx + 1} in {path}, but "
+                        f"{CHAPTER_NAMES_INPUT_PATH} only defines {len(BOOK_NAMES)} books."
+                    )
             chapter_num      = chap_num
             chapter_title    = ''
             skip_title_lines = 1
@@ -376,13 +404,14 @@ def write_chapter_tsv(ch: dict, valid_positions: set[int], out_dir: Path) -> Pat
 
 def main() -> None:
     if not INPUT_PATH.exists():
-        print(f"ERROR: input not found: {INPUT_PATH}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"Input not found: {INPUT_PATH}")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print(f"Parsing {INPUT_PATH} ...", flush=True)
     chapters = parse_txt(INPUT_PATH)
+    if not chapters:
+        raise ValueError(f"No chapters found in {INPUT_PATH} — check its format/encoding.")
     print(f"  {len(chapters)} chapters across {chapters[-1]['book_num']} books")
 
     total_tokens = sum(len(ch["tokens"]) for ch in chapters)
@@ -399,6 +428,13 @@ def main() -> None:
         write_chapter_tsv(ch, valid_pos, OUTPUT_DIR)
 
     print(f"Done. {len(chapters)} files written.")
+
+    shutil.copy(CHAPTER_NAMES_INPUT_PATH, BACKEND_CHAPTER_NAMES_PATH)
+    print(f"Copied {CHAPTER_NAMES_INPUT_PATH} -> {BACKEND_CHAPTER_NAMES_PATH}")
+
+    FRONTEND_CHAPTER_NAMES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(CHAPTER_NAMES_INPUT_PATH, FRONTEND_CHAPTER_NAMES_PATH)
+    print(f"Copied {CHAPTER_NAMES_INPUT_PATH} -> {FRONTEND_CHAPTER_NAMES_PATH}")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-.PHONY: deploy reqs update_reqs py_audit py_audit_fix npm_audit npm_audit_fix
+.PHONY: deploy reqs update_reqs py_audit py_audit_fix npm_audit npm_audit_fix chapters
 
 PYTHON_VERSION := 3.14.6
 UV_VERSION     := 0.11.14
@@ -8,6 +8,12 @@ NODE_VERSION   := 24.18
 
 deploy:
 	cd ansible && ansible-playbook deploy.yml
+
+# ── Preprocessing ─────────────────────────────────────────────────────────────
+
+chapters:
+	docker run --rm -v "$(PWD):/app" -w /app python:$(PYTHON_VERSION)-slim \
+		python3 preprocessing/build_chapters.py
 
 # ── Python / backend ──────────────────────────────────────────────────────────
 

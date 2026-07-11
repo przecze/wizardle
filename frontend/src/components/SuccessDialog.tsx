@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { GuessAnswer, MoveEntry } from '../types'
-import { shareMoveEmoji, parseChapterNum, getCookie, setCookie } from '../utils'
+import { WinnerInfo, MoveEntry, BookMeta } from '../types'
+import { shareMoveEmoji, chapterTitle, getCookie, setCookie } from '../utils'
 import './SuccessDialog.css'
 
 const SHARE_ARROWS_KEY = 'wizardle_share_arrows'
 
 interface Props {
-  winner: GuessAnswer
+  winner: WinnerInfo
+  books: string[]
+  booksMeta: Record<string, BookMeta>
   moveLog: MoveEntry[]
   date: string
   origBigram: string[]
@@ -29,13 +31,15 @@ function formatReadableDate(dateStr: string): string {
   return `${months[month - 1]} ${ordinal(day)} ${year}`
 }
 
-export default function SuccessDialog({ winner, moveLog, date, origBigram, onReset, fragmentContextText, fragmentContextModel, fragmentContextLoading }: Props) {
+export default function SuccessDialog({ winner, books, booksMeta, moveLog, date, origBigram, onReset, fragmentContextText, fragmentContextModel, fragmentContextLoading }: Props) {
   const [copied, setCopied] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [useArrows, setUseArrows] = useState(() => getCookie(SHARE_ARROWS_KEY) === '1')
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const chapNum = parseChapterNum(winner.chapter)
-  const tokens = winner.context_fragment.split(' ')
+  const book = books[winner.book_num - 1]
+  const chapNum = winner.chapter
+  const chapterName = chapterTitle(booksMeta, book, winner.chapter)
+  const tokens = winner.full_fragment.split(' ')
 
   useEffect(() => {
     return () => { if (copiedTimer.current) clearTimeout(copiedTimer.current) }
@@ -71,9 +75,9 @@ export default function SuccessDialog({ winner, moveLog, date, origBigram, onRes
 
   return (
     <div className="success-dialog">
-      <p className="success-dialog__book">📚 {winner.book} 📚</p>
+      <p className="success-dialog__book">📚 {book} 📚</p>
       <p className="success-dialog__chapter">
-        ✨ Chapter {chapNum}{winner.chapter_name ? `: ${winner.chapter_name}` : ''} ✨
+        ✨ Chapter {chapNum}{chapterName ? `: ${chapterName}` : ''} ✨
       </p>
 
       <div className="success-dialog__fragment">

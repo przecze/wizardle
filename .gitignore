@@ -27,11 +27,15 @@ nginx/html/*
 *.swp
 *~
 
-harrypotter.txt
-harrypotter.pdf
+# Raw source material
+input/
+
+# preprocessing outputs
 preprocessing/chapter_names.json
 preprocessing/chapters/
+frontend/src/data/chapter_names.json
 
+# any api keys
 *_api_key.txt
 
 # Local hint cache

@@ -1,10 +1,6 @@
-import { MoveEntry } from './types'
+import { BookMeta, ChapterNamesRaw, MoveEntry } from './types'
 
 export const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
-
-export function parseChapterNum(chapterId: string): string {
-  return chapterId.match(/(\d+)/)?.[1] ?? chapterId
-}
 
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
@@ -21,6 +17,25 @@ export function hasCookie(name: string): boolean {
 
 export function setCookie(name: string, value: string): void {
   document.cookie = `${name}=${value}; max-age=31536000; path=/`
+}
+
+// Single place resolving a chapter number to its display title (falls back to
+// the bare number if the title is somehow missing).
+export function chapterTitle(booksMeta: Record<string, BookMeta>, book: string, chapter: number): string {
+  return booksMeta[book]?.chapter_names[chapter] || String(chapter)
+}
+
+export function buildBooksMeta(raw: ChapterNamesRaw): { books: string[]; booksMeta: Record<string, BookMeta> } {
+  const books = raw.map(entry => entry.book)
+  const booksMeta: Record<string, BookMeta> = {}
+  for (const entry of raw) {
+    const nums = Object.keys(entry.chapters).map(Number).sort((a, b) => a - b)
+    booksMeta[entry.book] = {
+      chapters: nums,
+      chapter_names: Object.fromEntries(Object.entries(entry.chapters).map(([k, v]) => [Number(k), v])),
+    }
+  }
+  return { books, booksMeta }
 }
 
 export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
