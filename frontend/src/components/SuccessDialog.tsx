@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { WinnerInfo, MoveEntry, BookMeta } from '../types'
-import { shareMoveEmoji, chapterTitle, getCookie, setCookie } from '../utils'
+import { shareMoveEmoji, chapterTitle, getCookie, setCookie, WEDDING_DATE } from '../utils'
 import './SuccessDialog.css'
 
 const SHARE_ARROWS_KEY = 'wizardle_share_arrows'
@@ -93,6 +93,14 @@ export default function SuccessDialog({ winner, books, booksMeta, moveLog, date,
         })}
         <span className="word-placeholder"> …</span>
       </div>
+
+      {date === WEDDING_DATE && (
+        <p className="success-dialog__wedding-message">
+          Dear A&amp;K, have the most magical wedding! ❤️
+          <br />
+          — Przemek (Jan) Czechowski
+        </p>
+      )}
 
       <details className="success-dialog__fragment-context">
         <summary

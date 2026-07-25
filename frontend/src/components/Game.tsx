@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChapterNamesRaw, PuzzleResponse, WordResponse, GuessResponse, WinnerInfo, MoveEntry, SplashData, FragmentContextResponse } from '../types'
-import { todayStr, apiFetch, parseApiResponse, buildBooksMeta, chapterTitle, hasCookie, setCookie } from '../utils'
+import { todayStr, apiFetch, parseApiResponse, buildBooksMeta, chapterTitle, hasCookie, setCookie, WEDDING_DATE } from '../utils'
 import chapterNamesRaw from '../data/chapter_names.json'
 import TitleBar from './TitleBar'
 import TextArea from './TextArea'
@@ -158,6 +158,7 @@ export default function Game() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [moveLog, setMoveLog] = useState<MoveEntry[]>([])
   const [pendingMove, setPendingMove] = useState<MoveEntry | null>(null)
+  const [pendingWinner, setPendingWinner] = useState<WinnerInfo | null>(null)
   const [splash, setSplash] = useState<SplashData | null>(null)
 
   const [ruledOutBooks, setRuledOutBooks] = useState<Set<number>>(new Set())
@@ -296,7 +297,7 @@ export default function Game() {
       })
       const book = books[selectedBookNum - 1]
       const chName = chapterTitle(booksMeta, book, selectedChapter)
-      const emoji = data.correct ? '💫' : data.book_correct ? '📚' : '❌'
+      const emoji = data.correct ? (date === WEDDING_DATE ? '❤️' : '💫') : data.book_correct ? '📚' : '❌'
       const resultLabel = data.correct ? 'Correct!' : data.book_correct ? 'Right book, wrong chapter' : 'Wrong book'
       setPendingMove({
         kind: 'guess',
@@ -305,10 +306,8 @@ export default function Game() {
         correct: data.correct,
         bookCorrect: data.correct || !!data.book_correct,
       })
-      setSplash({ book, chapterName: chName, emoji, resultLabel, isSuccess: data.correct })
-      setGuessPhase('idle')
       if (data.correct && data.answer) {
-        setWinner({
+        setPendingWinner({
           ...data.answer,
           book_num: selectedBookNum,
           chapter: selectedChapter,
@@ -322,6 +321,8 @@ export default function Game() {
         setSelectedBookNum(null)
         setSelectedChapter(null)
       }
+      setSplash({ book, chapterName: chName, emoji, resultLabel, isSuccess: data.correct })
+      setGuessPhase('idle')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -425,7 +426,10 @@ export default function Game() {
         <GuessAnimation data={splash} onDismiss={() => {
           if (pendingMove) { setMoveLog(prev => [...prev, pendingMove]); setPendingMove(null) }
           setSplash(null)
-          if (splash.isSuccess) setShowSuccess(true)
+          if (splash.isSuccess) {
+            if (pendingWinner) { setWinner(pendingWinner); setPendingWinner(null) }
+            setShowSuccess(true)
+          }
         }} />
       )}
 

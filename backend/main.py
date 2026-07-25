@@ -12,6 +12,7 @@ TSV format (preprocessing/chapters/bookN_chapNN.tsv):
 """
 import hashlib
 import json
+import os
 import re
 import urllib.request
 from dataclasses import dataclass
@@ -30,7 +31,14 @@ OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
 MAX_WORDS_EACH_DIRECTION   = 15
 FRAGMENT_WORDS_EACH_SIDE    = 20
 
-FRAGMENT_CONTEXT_MODEL = "google/gemini-3.5-flash"
+# Wedding special puzzle. Defaults to the actual wedding date so a deploy with
+# no WEDDING_DATE env var set is always locked to it; set WEDDING_DATE to
+# today's date locally (e.g. in docker-compose.yml) to preview it early.
+WEDDING_DATE  = os.environ.get("WEDDING_DATE") or "2026-07-25"
+WEDDING_CHAPTER_FILE = "book7_chap08.tsv"
+WEDDING_START_POS    = 2392  # "you bonded"
+
+FRAGMENT_CONTEXT_MODEL = "google/gemini-3.6-flash"
 FRAGMENT_CONTEXT_SYSTEM_PROMPT = (
     "You are a Harry Potter books' expert writing a brief context note shown after a player "
     "correctly guesses a fragment's chapter in a Harry Potter guessing game. "
@@ -185,6 +193,11 @@ def _get_puzzle(date_str: str) -> Puzzle:
     the chapter file and start_pos from that entry are used directly instead
     of the seeding logic.
     """
+    if date_str == WEDDING_DATE:
+        chosen_file = CHAPTERS_DIR / WEDDING_CHAPTER_FILE
+        rows = _load_chapter_tsv(chosen_file)
+        return _build_puzzle(chosen_file, rows, WEDDING_START_POS)
+
     # Check for manual override (used when token IDs shift after reprocessing)
     if PUZZLE_OVERRIDES_PATH.exists():
         with open(PUZZLE_OVERRIDES_PATH, encoding="utf-8") as f:
@@ -442,8 +455,9 @@ def _call_llm_with_chapter(
             {"role": "system", "content": FRAGMENT_CONTEXT_SYSTEM_PROMPT},
             {"role": "user",   "content": user_msg},
         ],
-        "max_tokens": 200,
+        "max_tokens": 2000,
         "temperature": 0.3,
+        "reasoning": {"effort": "minimal"}
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -457,8 +471,15 @@ def _call_llm_with_chapter(
         },
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
-        body = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req) as resp:
+            body = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        logger.error(f"Fragment-context API error body: {err_body}")
+        raise
+
+    logger.info(f"Fragment-context full API response: {json.dumps(body)}")
 
     return body["choices"][0]["message"]["content"].strip()
 

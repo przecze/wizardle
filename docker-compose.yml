@@ -9,6 +9,10 @@ services:
       - openrouter_key
     environment:
       - PYTHONUNBUFFERED=1
+      # Wedding special puzzle date; defaults to 2026-07-25 if unset (see
+      # backend/main.py). Override locally to preview early, e.g.:
+      #   WEDDING_DATE=$(date +%F) docker compose up -d backend
+      - WEDDING_DATE=${WEDDING_DATE:-}
     networks:
       - localnet
     command: uvicorn main:app --reload --workers 1 --host 0.0.0.0 --port 8000
@@ -29,6 +33,8 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      # See WEDDING_DATE comment on the backend service above.
+      - VITE_WEDDING_DATE=${WEDDING_DATE:-}
     networks:
       - localnet
     restart: unless-stopped

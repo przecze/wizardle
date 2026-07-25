@@ -2,6 +2,11 @@ import { BookMeta, ChapterNamesRaw, MoveEntry } from './types'
 
 export const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 
+// Defaults to the actual wedding date so a deploy with no VITE_WEDDING_DATE
+// set is always locked to it; set VITE_WEDDING_DATE to today's date locally
+// (e.g. in docker-compose.yml) to preview the special puzzle early.
+export const WEDDING_DATE = import.meta.env.VITE_WEDDING_DATE || '2026-07-25'
+
 // Kept in sync (by hand) with the identical inline computation in
 // public/prefetch-puzzle.js, which runs outside the build/type-check pipeline.
 // If this logic changes, update that file too or the prefetch silently stops matching.
