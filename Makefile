@@ -19,11 +19,7 @@ chapters:
 
 reqs:
 	docker run --rm -v "$(PWD)/backend:/app" -w /app python:$(PYTHON_VERSION)-slim \
-		bash -c "pip install -q uv==$(UV_VERSION) && uv pip compile requirements.in --output-file requirements.txt"
-
-update_reqs:
-	docker run --rm -v "$(PWD)/backend:/app" -w /app python:$(PYTHON_VERSION)-slim \
-		bash -c "pip install -q uv==$(UV_VERSION) && uv pip compile requirements.in --upgrade --output-file requirements.txt"
+		bash -c "pip install -q uv==$(UV_VERSION) && uv pip compile requirements.in --exclude-newer '7 days' --output-file requirements.txt"
 
 py_audit:
 	docker run --rm -v "$(PWD)/backend:/app" -w /app python:$(PYTHON_VERSION)-slim \
