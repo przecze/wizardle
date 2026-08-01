@@ -16,10 +16,12 @@ import os
 import re
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from loguru import logger
 from pydantic import BaseModel
 
@@ -304,6 +306,39 @@ class FragmentContextRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+def _today_str() -> str:
+    """Must match frontend/src/utils.ts todayStr() (new Date().toISOString().slice(0, 10))."""
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _puzzle_payload(date_str: str, puzzle: Puzzle) -> dict:
+    """Shape shared by GET /puzzle and the "/" data island — the only two
+    places that hand the day's bigram to the client."""
+    return {"date": date_str, "words": [puzzle.word1, puzzle.word2]}
+
+
+@app.get("/puzzle-island", response_class=HTMLResponse)
+def puzzle_island():
+    """Today's puzzle as a literal <script> data island, spliced into the
+    served index.html by nginx SSI (see nginx.conf.template's `ssi on;` and
+    the `<!--#include virtual="/api/puzzle-island" -->` marker in
+    frontend/index.html). Keeps the client from needing a round-trip to
+    /api/puzzle on first load, without the app shell itself passing through
+    the backend — Vite's own dev/build asset handling stays untouched."""
+    date_str = _today_str()
+    try:
+        puzzle = _get_puzzle(date_str)
+        puzzle_json = json.dumps(_puzzle_payload(date_str, puzzle))
+    except Exception as e:
+        logger.error(f"Failed to build puzzle data island for {date_str}: {e}")
+        puzzle_json = "null"
+
+    # Escape "</" so the fragment can never prematurely close the script tag.
+    puzzle_json = puzzle_json.replace("</", "<\\/")
+
+    return f'<script id="__puzzle_data__" type="application/json">{puzzle_json}</script>'
+
+
 @app.get("/puzzle")
 def get_puzzle(date: str):
     """Return the initial 2-word bigram for a given date."""
@@ -315,10 +350,7 @@ def get_puzzle(date: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    return {
-        "date":  date,
-        "words": [puzzle.word1, puzzle.word2],
-    }
+    return _puzzle_payload(date, puzzle)
 
 
 @app.post("/word")

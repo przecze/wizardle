@@ -7,9 +7,9 @@ export const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 // (e.g. in docker-compose.yml) to preview the special puzzle early.
 export const WEDDING_DATE = import.meta.env.VITE_WEDDING_DATE || '2026-07-25'
 
-// Kept in sync (by hand) with the identical inline computation in
-// public/prefetch-puzzle.js, which runs outside the build/type-check pipeline.
-// If this logic changes, update that file too or the prefetch silently stops matching.
+// Kept in sync (by hand) with the identical computation in backend/main.py's
+// _today_str(). If this logic changes, update that too or the server-rendered
+// puzzle data island silently stops matching.
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }

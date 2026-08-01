@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChapterNamesRaw, PuzzleResponse, WordResponse, GuessResponse, WinnerInfo, MoveEntry, SplashData, FragmentContextResponse } from '../types'
-import { todayStr, apiFetch, parseApiResponse, buildBooksMeta, chapterTitle, hasCookie, setCookie, WEDDING_DATE } from '../utils'
+import { todayStr, apiFetch, buildBooksMeta, chapterTitle, hasCookie, setCookie, WEDDING_DATE } from '../utils'
 import chapterNamesRaw from '../data/chapter_names.json'
 import TitleBar from './TitleBar'
 import TextArea from './TextArea'
@@ -10,11 +10,9 @@ import GuessDialog from './GuessDialog'
 import GuessAnimation from './GuessAnimation'
 import SuccessDialog from './SuccessDialog'
 import AboutDialog from './AboutDialog'
-import NewFeatureDialog from './NewFeatureDialog'
 import './Game.css'
 
 const ABOUT_SEEN_KEY = 'wizardle_about_seen'
-const NEW_FEATURE_SEEN_KEY = 'wizardle_new_feature_share_emoji_seen'
 const MIN_LOADING_DISPLAY_MS = 1000
 
 type GuessPhase = 'idle' | 'chapter'
@@ -36,22 +34,25 @@ function legacyStorageKey(date: string) { return `${storageKey(date)}.legacy` }
 
 const { books: STATIC_BOOKS, booksMeta: STATIC_BOOKS_META } = buildBooksMeta(chapterNamesRaw as ChapterNamesRaw)
 
-declare global {
-  interface Window {
-    // Set by public/prefetch-puzzle.js, which fires before the app bundle even
-    // downloads. Consumed once by fetchPuzzle below.
-    __puzzlePrefetch?: { date: string; promise: Promise<Response> }
+// Reads the puzzle data island the backend embeds in index.html (see
+// backend/templates/index.html) so the client can boot without a round-trip
+// to /api/puzzle. Falls back to fetching if it's missing or stale (e.g. the
+// page was served before midnight UTC and is still open, or the date island
+// failed to build server-side).
+function readPuzzleDataIsland(date: string): PuzzleResponse | null {
+  const el = document.getElementById('__puzzle_data__')
+  if (!el?.textContent) return null
+  try {
+    const data = JSON.parse(el.textContent) as PuzzleResponse | null
+    return data && data.date === date ? data : null
+  } catch {
+    return null
   }
 }
 
-// Adopts the already-in-flight request from prefetch-puzzle.js when its date matches,
-// instead of firing a second one.
 function fetchPuzzle(date: string): Promise<PuzzleResponse> {
-  const boot = window.__puzzlePrefetch
-  if (boot && boot.date === date) {
-    window.__puzzlePrefetch = undefined
-    return boot.promise.then(res => parseApiResponse<PuzzleResponse>(res))
-  }
+  const fromIsland = readPuzzleDataIsland(date)
+  if (fromIsland) return Promise.resolve(fromIsland)
   return apiFetch<PuzzleResponse>(`/puzzle?date=${date}`)
 }
 
@@ -140,11 +141,39 @@ function clearSaved(date: string) {
   localStorage.removeItem(storageKey(date))
 }
 
+// Synchronously resolves the initial gameplay state (saved progress, or a
+// fresh puzzle from the data island) so first render can already show the
+// puzzle instead of a placeholder — avoiding the extra mount-then-fetch
+// render pass that a useEffect-based load would incur.
+function computeInitialGameState(date: string): PersistedState | null {
+  const saved = loadSaved(date)
+  if (saved) return saved
+
+  const island = readPuzzleDataIsland(date)
+  if (!island) return null
+
+  return {
+    words: island.words,
+    origBigram: island.words,
+    moveLog: [],
+    winner: null,
+    showSuccess: false,
+    leftLimit: false,
+    rightLimit: false,
+    ruledOutBooks: [],
+    confirmedBook: null,
+  }
+}
+
 export default function Game() {
   const [date, setDate] = useState<string>(todayStr)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [words, setWords] = useState<string[]>([])
-  const [origBigram, setOrigBigram] = useState<string[]>([])
+  const bootRef = useRef<PersistedState | null | undefined>(undefined)
+  if (bootRef.current === undefined) bootRef.current = computeInitialGameState(date)
+  const boot = bootRef.current
+
+  const [words, setWords] = useState<string[]>(boot?.words ?? [])
+  const [origBigram, setOrigBigram] = useState<string[]>(boot?.origBigram ?? [])
   const books = STATIC_BOOKS
   const booksMeta = STATIC_BOOKS_META
 
@@ -154,18 +183,18 @@ export default function Game() {
   const [selectedBookNum, setSelectedBookNum] = useState<number | null>(null)
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null)
 
-  const [winner, setWinner] = useState<WinnerInfo | null>(null)
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [moveLog, setMoveLog] = useState<MoveEntry[]>([])
+  const [winner, setWinner] = useState<WinnerInfo | null>(boot?.winner ?? null)
+  const [showSuccess, setShowSuccess] = useState(boot?.showSuccess ?? false)
+  const [moveLog, setMoveLog] = useState<MoveEntry[]>(boot?.moveLog ?? [])
   const [pendingMove, setPendingMove] = useState<MoveEntry | null>(null)
   const [pendingWinner, setPendingWinner] = useState<WinnerInfo | null>(null)
   const [splash, setSplash] = useState<SplashData | null>(null)
 
-  const [ruledOutBooks, setRuledOutBooks] = useState<Set<number>>(new Set())
-  const [confirmedBook, setConfirmedBook] = useState<number | null>(null)
+  const [ruledOutBooks, setRuledOutBooks] = useState<Set<number>>(new Set(boot?.ruledOutBooks ?? []))
+  const [confirmedBook, setConfirmedBook] = useState<number | null>(boot?.confirmedBook ?? null)
 
-  const [leftLimit, setLeftLimit] = useState(false)
-  const [rightLimit, setRightLimit] = useState(false)
+  const [leftLimit, setLeftLimit] = useState(boot?.leftLimit ?? false)
+  const [rightLimit, setRightLimit] = useState(boot?.rightLimit ?? false)
 
   const [fragmentContextText, setFragmentContextText] = useState<string | null>(null)
   const [fragmentContextModel, setFragmentContextModel] = useState<string | null>(null)
@@ -174,7 +203,6 @@ export default function Game() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showAbout, setShowAbout] = useState(() => !hasCookie(ABOUT_SEEN_KEY))
-  const [showNewFeature, setShowNewFeature] = useState(() => hasCookie(ABOUT_SEEN_KEY) && !hasCookie(NEW_FEATURE_SEEN_KEY))
   const [flashHints, setFlashHints] = useState(false)
 
   // Fetch AI fragment context whenever winner is set (fires on new win and on page reload with saved state)
@@ -212,9 +240,17 @@ export default function Game() {
     return () => { ignore = true }
   }, [winner, date])
 
+  // Tracks which date `words`/`origBigram`/etc. actually belong to. Since
+  // navigateDate no longer blanks state before the load effect below resolves
+  // (that caused a real->blank->real flicker), this stops the persist effect
+  // from writing the *previous* date's still-in-state words under the *new*
+  // date's storage key during the gap between setDate and the fetch resolving.
+  const loadedDateRef = useRef<string | null>(boot ? date : null)
+
   // Persist gameplay state whenever it changes (skip until puzzle is loaded)
   useEffect(() => {
     if (origBigram.length === 0) return
+    if (loadedDateRef.current !== date) return
     saveState(date, {
       words, origBigram, moveLog, winner, showSuccess,
       leftLimit, rightLimit,
@@ -223,7 +259,14 @@ export default function Game() {
     })
   }, [date, words, origBigram, moveLog, winner, showSuccess, leftLimit, rightLimit, ruledOutBooks, confirmedBook])
 
+  // Fires on date navigation / reset. Skipped on the very first run when
+  // `boot` already seeded state synchronously (see computeInitialGameState).
+  const skipNextLoadRef = useRef(boot !== null)
   useEffect(() => {
+    if (skipNextLoadRef.current) {
+      skipNextLoadRef.current = false
+      return
+    }
     setLoading(true)
     fetchPuzzle(date)
       .then(data => {
@@ -250,6 +293,7 @@ export default function Game() {
           setRuledOutBooks(new Set())
           setConfirmedBook(null)
         }
+        loadedDateRef.current = date
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
@@ -335,19 +379,15 @@ export default function Game() {
     d.setDate(d.getDate() + delta)
     const next = d.toISOString().slice(0, 10)
     if (next > todayStr()) return
+    // Gameplay state (words, ruledOutBooks, etc.) is intentionally left as-is
+    // here — the load effect below replaces it in one commit once the new
+    // date's data is ready. Clearing it eagerly caused a real->blank->real
+    // flicker on every navigation (only masked for the has-island date since
+    // that one resolves synchronously).
     setDate(next)
-    setOrigBigram([])
-    setWords([])
-    setMoveLog([])
-    setWinner(null)
-    setShowSuccess(false)
-    setLeftLimit(false)
-    setRightLimit(false)
     setGuessPhase('idle')
     setSelectedBookNum(null)
     setSelectedChapter(null)
-    setRuledOutBooks(new Set())
-    setConfirmedBook(null)
     setError(null)
   }
 
@@ -439,13 +479,6 @@ export default function Game() {
           setShowAbout(false)
           setFlashHints(true)
           setTimeout(() => setFlashHints(false), 1600)
-        }} />
-      )}
-
-      {showNewFeature && (
-        <NewFeatureDialog onClose={() => {
-          setCookie(NEW_FEATURE_SEEN_KEY, '1')
-          setShowNewFeature(false)
         }} />
       )}
 

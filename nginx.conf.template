@@ -1,5 +1,9 @@
 # nginx.conf.template - single config for dev and prod
-# Uses DEV_MODE env var to conditionally proxy to Vite or serve static files
+# Uses DEV_MODE env var to conditionally proxy to Vite or serve static files.
+# `ssi on;` splices today's puzzle into index.html via the
+# `<!--#include virtual="/api/puzzle-island" -->` marker in frontend/index.html
+# (see backend/main.py's GET /puzzle-island) — Vite's normal dev/build asset
+# handling is otherwise untouched.
 
 worker_processes auto;
 error_log /var/log/nginx/error.log warn;
@@ -45,6 +49,11 @@ http {
 
     root /usr/share/nginx/html;
     index index.html;
+
+    # Splices the puzzle-island include (see top-of-file comment) into any
+    # text/html response, whether served statically (prod) or proxied from
+    # Vite's dev transform of index.html (dev).
+    ssi on;
 
     # --- Security headers ---
     add_header X-Frame-Options "DENY" always;
