@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Tech Stack
 
-- **Preprocessing**: Python, `uv run preprocessing/preprocess.py` (inline deps header)
+- **Preprocessing**: Python, `uv run preprocessing/build_chapters.py` (inline deps header), or dockerized via `make chapters`
 - **Backend**: Python FastAPI, served by uvicorn
 - **Frontend**: React + TypeScript, Vite — components in `frontend/src/components/`
 - **Infrastructure**: Docker Compose (dev + prod), Nginx, Ansible → `bluh`

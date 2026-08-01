@@ -74,6 +74,8 @@ services:
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
     depends_on:
       - backend
+    ports:
+      - 127.0.0.1:3080:80
     restart: always
     profiles:
       - production
