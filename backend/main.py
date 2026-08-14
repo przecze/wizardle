@@ -376,6 +376,7 @@ def get_next_word(req: WordRequest):
         if non_dash_added >= MAX_WORDS_EACH_DIRECTION:
             return {"word": None, "limit_reached": True}
         new_word = _extend_fragment(tokens, start_pos, len(req.revealed_words), "left")
+        limit_reached = non_dash_added + 1 >= MAX_WORDS_EACH_DIRECTION
     else:
         non_dash_right = sum(
             1 for t in tokens[orig_pos : start_pos + len(req.revealed_words) + 1]
@@ -385,11 +386,12 @@ def get_next_word(req: WordRequest):
         if words_added_right >= MAX_WORDS_EACH_DIRECTION:
             return {"word": None, "limit_reached": True}
         new_word = _extend_fragment(tokens, start_pos, len(req.revealed_words), "right")
+        limit_reached = words_added_right + 1 >= MAX_WORDS_EACH_DIRECTION
 
     if new_word is None:
         return {"word": None, "limit_reached": True}
 
-    return {"word": new_word, "limit_reached": False}
+    return {"word": new_word, "limit_reached": limit_reached}
 
 
 def _fragment_window(tokens: list[str], orig_pos: int) -> tuple[list[str], list[str], list[str]]:

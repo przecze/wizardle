@@ -309,14 +309,15 @@ export default function Game() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date, direction, revealed_words: words }),
       })
-      if (data.limit_reached || data.word == null) {
-        if (direction === 'left') setLeftLimit(true)
-        else setRightLimit(true)
-      } else {
+      if (data.word != null) {
         const newWord = data.word
         setWords(prev => direction === 'left' ? [newWord, ...prev] : [...prev, newWord])
         setAnimIdx(direction === 'left' ? 0 : words.length)
         setMoveLog(prev => [...prev, { kind: 'word', direction, word: newWord }])
+      }
+      if (data.limit_reached) {
+        if (direction === 'left') setLeftLimit(true)
+        else setRightLimit(true)
       }
     } catch (e) {
       setError((e as Error).message)
