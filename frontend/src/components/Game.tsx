@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChapterNamesRaw, PuzzleResponse, WordResponse, GuessResponse, WinnerInfo, MoveEntry, SplashData, FragmentContextResponse } from '../types'
 import { todayStr, apiFetch, buildBooksMeta, chapterTitle, hasCookie, setCookie, WEDDING_DATE } from '../utils'
 import chapterNamesRaw from '../data/chapter_names.json'
+import { RevealedWords, RevealedWordsData } from '../revealedWords'
 import TitleBar from './TitleBar'
 import TextArea from './TextArea'
 import GuessButtons from './GuessButtons'
@@ -17,8 +18,11 @@ const MIN_LOADING_DISPLAY_MS = 1000
 
 type GuessPhase = 'idle' | 'chapter'
 
-interface PersistedState {
-  words: string[]
+// The RevealedWordsData fields (words + origIdx) are persisted flat and
+// on-disk exactly as RevealedWords itself shapes them — Game.tsx never
+// names origIdx directly, it only round-trips RevealedWordsData at this
+// serialization boundary.
+interface PersistedState extends RevealedWordsData {
   origBigram: string[]
   moveLog: MoveEntry[]
   winner: WinnerInfo | null
@@ -102,8 +106,9 @@ function isLegacyState(parsed: any): boolean {
 }
 
 function migratePersistedState(parsed: any): PersistedState {
+  const revealed = RevealedWords.fromData(parsed, parsed.origBigram)
   return {
-    words: parsed.words,
+    ...revealed.toData(),
     origBigram: parsed.origBigram,
     moveLog: (parsed.moveLog ?? []).map(migrateMoveEntry),
     winner: migrateWinner(parsed.winner),
@@ -124,7 +129,10 @@ function loadSaved(date: string): PersistedState | null {
     const raw = localStorage.getItem(storageKey(date))
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (!isLegacyState(parsed)) return parsed as PersistedState
+    if (!isLegacyState(parsed)) {
+      Object.assign(parsed, RevealedWords.fromData(parsed, parsed.origBigram).toData())
+      return parsed as PersistedState
+    }
 
     // Preserve the untouched legacy record before overwriting the live key.
     const legacyKey = legacyStorageKey(date)
@@ -155,6 +163,7 @@ function computeInitialGameState(date: string): PersistedState | null {
   return {
     words: island.words,
     origBigram: island.words,
+    origIdx: 0,
     moveLog: [],
     winner: null,
     showSuccess: false,
@@ -172,8 +181,9 @@ export default function Game() {
   if (bootRef.current === undefined) bootRef.current = computeInitialGameState(date)
   const boot = bootRef.current
 
-  const [words, setWords] = useState<string[]>(boot?.words ?? [])
-  const [origBigram, setOrigBigram] = useState<string[]>(boot?.origBigram ?? [])
+  const [revealed, setRevealed] = useState<RevealedWords>(
+    boot ? RevealedWords.fromData(boot, boot.origBigram) : RevealedWords.fromOrigBigram([]),
+  )
   const books = STATIC_BOOKS
   const booksMeta = STATIC_BOOKS_META
 
@@ -205,8 +215,21 @@ export default function Game() {
   const [showAbout, setShowAbout] = useState(() => !hasCookie(ABOUT_SEEN_KEY))
   const [flashHints, setFlashHints] = useState(false)
 
+  // Tracks which date `revealed`/`moveLog`/etc. actually belong to. Since
+  // navigateDate no longer blanks state before the load effect below resolves
+  // (that caused a real->blank->real flicker), this stops the persist effect
+  // from writing the *previous* date's still-in-state words under the *new*
+  // date's storage key during the gap between setDate and the fetch resolving.
+  const loadedDateRef = useRef<string | null>(boot ? date : null)
+
   // Fetch AI fragment context whenever winner is set (fires on new win and on page reload with saved state)
   useEffect(() => {
+    // Guard against firing with a stale winner from the previous date: on
+    // navigateDate, `date` updates immediately but `winner` (and the rest of
+    // gameplay state) isn't replaced until the load effect below resolves.
+    // Without this check we'd briefly fetch fragment-context with the new
+    // date but the old date's book/chapter, which the server rejects (403).
+    if (loadedDateRef.current !== date) return
     if (!winner) {
       setFragmentContextText(null)
       setFragmentContextModel(null)
@@ -240,24 +263,17 @@ export default function Game() {
     return () => { ignore = true }
   }, [winner, date])
 
-  // Tracks which date `words`/`origBigram`/etc. actually belong to. Since
-  // navigateDate no longer blanks state before the load effect below resolves
-  // (that caused a real->blank->real flicker), this stops the persist effect
-  // from writing the *previous* date's still-in-state words under the *new*
-  // date's storage key during the gap between setDate and the fetch resolving.
-  const loadedDateRef = useRef<string | null>(boot ? date : null)
-
   // Persist gameplay state whenever it changes (skip until puzzle is loaded)
   useEffect(() => {
-    if (origBigram.length === 0) return
+    if (revealed.origBigram.length === 0) return
     if (loadedDateRef.current !== date) return
     saveState(date, {
-      words, origBigram, moveLog, winner, showSuccess,
+      ...revealed.toData(), origBigram: revealed.origBigram, moveLog, winner, showSuccess,
       leftLimit, rightLimit,
       ruledOutBooks: [...ruledOutBooks],
       confirmedBook,
     })
-  }, [date, words, origBigram, moveLog, winner, showSuccess, leftLimit, rightLimit, ruledOutBooks, confirmedBook])
+  }, [date, revealed, moveLog, winner, showSuccess, leftLimit, rightLimit, ruledOutBooks, confirmedBook])
 
   // Fires on date navigation / reset. Skipped on the very first run when
   // `boot` already seeded state synchronously (see computeInitialGameState).
@@ -273,8 +289,7 @@ export default function Game() {
         setAnimIdx(null)
         const saved = loadSaved(date)
         if (saved) {
-          setWords(saved.words)
-          setOrigBigram(saved.origBigram)
+          setRevealed(RevealedWords.fromData(saved, saved.origBigram))
           setMoveLog(saved.moveLog)
           setWinner(saved.winner)
           setShowSuccess(saved.showSuccess)
@@ -283,8 +298,7 @@ export default function Game() {
           setRuledOutBooks(new Set(saved.ruledOutBooks))
           setConfirmedBook(saved.confirmedBook)
         } else {
-          setWords(data.words)
-          setOrigBigram(data.words)
+          setRevealed(RevealedWords.fromOrigBigram(data.words))
           setMoveLog([])
           setWinner(null)
           setShowSuccess(false)
@@ -307,12 +321,12 @@ export default function Game() {
       const data = await apiFetch<WordResponse>('/word', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, direction, revealed_words: words }),
+        body: JSON.stringify({ date, direction, revealed_words: revealed.toArray() }),
       })
       if (data.word != null) {
         const newWord = data.word
-        setWords(prev => direction === 'left' ? [newWord, ...prev] : [...prev, newWord])
-        setAnimIdx(direction === 'left' ? 0 : words.length)
+        setAnimIdx(revealed.nextIndex(direction))
+        setRevealed(prev => prev.addWord(direction, newWord))
         setMoveLog(prev => [...prev, { kind: 'word', direction, word: newWord }])
       }
       if (data.limit_reached) {
@@ -324,7 +338,7 @@ export default function Game() {
     } finally {
       setLoading(false)
     }
-  }, [loading, date, words])
+  }, [loading, date, revealed])
 
   const submitGuess = useCallback(async () => {
     if (!selectedBookNum || !selectedChapter || loading) return
@@ -394,8 +408,7 @@ export default function Game() {
 
   function handleReset() {
     clearSaved(date)
-    setOrigBigram([])
-    setWords([])
+    setRevealed(RevealedWords.fromOrigBigram([]))
     setMoveLog([])
     setWinner(null)
     setShowSuccess(false)
@@ -420,11 +433,10 @@ export default function Game() {
       )}
 
       {showSuccess && winner ? (
-        <SuccessDialog winner={winner} books={books} booksMeta={booksMeta} moveLog={moveLog} date={date} origBigram={origBigram} onReset={handleReset} fragmentContextText={fragmentContextText} fragmentContextModel={fragmentContextModel} fragmentContextLoading={fragmentContextLoading} />
+        <SuccessDialog winner={winner} books={books} booksMeta={booksMeta} moveLog={moveLog} date={date} origBigram={revealed.origBigram} onReset={handleReset} fragmentContextText={fragmentContextText} fragmentContextModel={fragmentContextModel} fragmentContextLoading={fragmentContextLoading} />
       ) : (
         <TextArea
-          words={words}
-          origBigram={origBigram}
+          revealed={revealed}
           animIdx={animIdx}
           loading={loading}
           leftLimit={leftLimit}
@@ -475,7 +487,7 @@ export default function Game() {
       )}
 
       {showAbout && (
-        <AboutDialog bigram={origBigram} onClose={() => {
+        <AboutDialog bigram={revealed.origBigram} onClose={() => {
           setCookie(ABOUT_SEEN_KEY, '1')
           setShowAbout(false)
           setFlashHints(true)

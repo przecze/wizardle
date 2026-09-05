@@ -1,9 +1,9 @@
 import React, { useRef } from 'react'
+import { RevealedWords } from '../revealedWords'
 import './TextArea.css'
 
 interface Props {
-  words: string[]
-  origBigram: string[]
+  revealed: RevealedWords
   animIdx: number | null
   loading: boolean
   leftLimit: boolean
@@ -25,7 +25,7 @@ function AnimatedWord({ word }: { word: string }) {
   )
 }
 
-export default function TextArea({ words, origBigram, animIdx, loading, leftLimit, rightLimit, winner, flashing, onAddWord }: Props) {
+export default function TextArea({ revealed, animIdx, loading, leftLimit, rightLimit, winner, flashing, onAddWord }: Props) {
   const wordKeys = useRef<Map<number, number>>(new Map())
   const keyCounter = useRef(0)
   const prevAnimIdx = useRef<number | null>(null)
@@ -43,11 +43,7 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
     return wordKeys.current.get(idx)!
   }
 
-  const origIdx = words.indexOf(origBigram[0])
-  const safeOrigIdx = origIdx > 0 ? origIdx : 0
-  const wordsLeft = safeOrigIdx
-  const wordsRight = words.length - safeOrigIdx - origBigram.length
-
+  const words = revealed.toArray()
   const leftDisabled = loading || leftLimit
   const rightDisabled = loading || rightLimit
 
@@ -58,19 +54,18 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
           className={`text-area__plus${leftDisabled ? ' text-area__plus--disabled' : ''}${flashing && !leftDisabled ? ' flash-hint' : ''}`}
           onClick={() => onAddWord('left')}
           disabled={leftDisabled}
-          title={leftLimit ? 'Max 15 words can be revealed on either side' : `Add word left (${wordsLeft}/15)`}
+          title={leftLimit ? 'Max 15 words can be revealed on either side' : `Add word left (${revealed.wordsLeft}/15)`}
           aria-label="Add word to the left"
         >+</button>
       )}
 
       <div className="text-area__content">
         {words.map((w, i) => {
-          const isOrig = i >= origIdx && i < origIdx + origBigram.length
           const isNew = i === animIdx
           const key = getWordKey(i)
           return (
             <span key={key}>
-              <span className={`word-token${isOrig ? ' word-token--orig' : ''}`}>
+              <span className={`word-token${revealed.isOrig(i) ? ' word-token--orig' : ''}`}>
                 {isNew ? <AnimatedWord word={w} /> : w}
               </span>
               {i < words.length - 1 ? ' ' : ''}
@@ -85,7 +80,7 @@ export default function TextArea({ words, origBigram, animIdx, loading, leftLimi
           className={`text-area__plus${rightDisabled ? ' text-area__plus--disabled' : ''}${flashing && !rightDisabled ? ' flash-hint' : ''}`}
           onClick={() => onAddWord('right')}
           disabled={rightDisabled}
-          title={rightLimit ? 'Max 15 words can be revealed on either side' : `Add word right (${wordsRight}/15)`}
+          title={rightLimit ? 'Max 15 words can be revealed on either side' : `Add word right (${revealed.wordsRight}/15)`}
           aria-label="Add word to the right"
         >+</button>
       )}
