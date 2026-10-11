@@ -12,6 +12,7 @@ TSV format (preprocessing/chapters/bookN_chapNN.tsv):
 """
 import hashlib
 import json
+import logging
 import os
 import re
 import urllib.request
@@ -22,7 +23,6 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from loguru import logger
 from pydantic import BaseModel
 
 CHAPTERS_DIR       = Path(__file__).parent.parent / "preprocessing" / "chapters"
@@ -32,6 +32,9 @@ FRAGMENT_CONTEXT_CACHE_DIR = Path("/fragment_context_cache")
 OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
 MAX_WORDS_EACH_DIRECTION   = 15
 FRAGMENT_WORDS_EACH_SIDE    = 20
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+logger = logging.getLogger("wizardle")
 
 # Wedding special puzzle. Defaults to the actual wedding date so a deploy with
 # no WEDDING_DATE env var set is always locked to it; set WEDDING_DATE to

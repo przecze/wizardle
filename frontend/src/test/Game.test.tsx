@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, getConfig, render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('../utils', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../utils')>()
@@ -25,34 +24,39 @@ import {
 
 const mockApiFetch = apiFetch as ReturnType<typeof vi.fn>
 
+/** Click, then yield a macrotask so the async state updates it triggers
+ *  (e.g. mocked apiFetch) settle — same flush as @testing-library/user-event */
+async function click(el: Element) {
+  await getConfig().asyncWrapper(async () => {
+    fireEvent.click(el)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
 /** Render Game and wait for the initial puzzle to load */
 async function renderGame() {
-  const user = userEvent.setup()
   render(<Game />)
-  await waitFor(() => {
-    expect(screen.getByText('dark')).toBeInTheDocument()
-  })
-  return user
+  await waitFor(() => screen.getByText('dark'))
 }
 
 /** Helper: select a book, pick a chapter, submit the guess */
-async function makeGuess(user: ReturnType<typeof userEvent.setup>, bookRoman: string, chapterName: string) {
+async function makeGuess(bookRoman: string, chapterName: string) {
   // Click book button
-  await user.click(screen.getByRole('button', { name: bookRoman }))
+  click(screen.getByRole('button', { name: bookRoman }))
 
   // GuessDialog opens — click the chapter
-  await user.click(screen.getByRole('button', { name: new RegExp(chapterName) }))
+  click(screen.getByRole('button', { name: new RegExp(chapterName) }))
 
   // Click submit
-  await user.click(screen.getByRole('button', { name: /submit guess/i }))
+  click(screen.getByRole('button', { name: /submit guess/i }))
 }
 
 /** Helper: dismiss the GuessAnimation splash by clicking its backdrop */
-async function dismissSplash(user: ReturnType<typeof userEvent.setup>) {
+async function dismissSplash() {
   await waitFor(() => {
-    expect(document.querySelector('.splash-backdrop')).toBeInTheDocument()
+    expect(document.querySelector('.splash-backdrop')).not.toBeNull()
   })
-  await user.click(document.querySelector('.splash-backdrop')!)
+  click(document.querySelector('.splash-backdrop')!)
 }
 
 beforeEach(() => {
@@ -66,92 +70,83 @@ beforeEach(() => {
 
 describe('Game integration tests', () => {
   it('reveals a word to the left and right', async () => {
-    const user = await renderGame()
+    await renderGame()
 
     // Mock word reveal for left
     mockApiFetch.mockResolvedValueOnce(MOCK_WORD_LEFT)
-    await user.click(screen.getByLabelText('Add word to the left'))
-    await waitFor(() => {
-      expect(screen.getByText('the')).toBeInTheDocument()
-    })
+    click(screen.getByLabelText('Add word to the left'))
+    await waitFor(() => screen.getByText('the'))
 
     // Mock word reveal for right
     mockApiFetch.mockResolvedValueOnce(MOCK_WORD_RIGHT)
-    await user.click(screen.getByLabelText('Add word to the right'))
-    await waitFor(() => {
-      expect(screen.getByText('was')).toBeInTheDocument()
-    })
+    click(screen.getByLabelText('Add word to the right'))
+    await waitFor(() => screen.getByText('was'))
 
     // Progress log should show both word moves
-    expect(screen.getByText(/added word on the left/)).toBeInTheDocument()
-    expect(screen.getByText(/added word on the right/)).toBeInTheDocument()
+    screen.getByText(/added word on the left/)
+    screen.getByText(/added word on the right/)
   })
 
   it('handles wrong book guess', async () => {
-    const user = await renderGame()
+    await renderGame()
 
     mockApiFetch.mockResolvedValueOnce(MOCK_GUESS_WRONG)
-    await makeGuess(user, 'I', 'The Boy Who Lived')
-    await dismissSplash(user)
+    await makeGuess('I', 'The Boy Who Lived')
+    await dismissSplash()
 
     // Book I button should be ruled out (disabled)
-    const bookBtn = screen.getByRole('button', { name: 'I' })
-    expect(bookBtn).toBeDisabled()
+    const bookBtn = screen.getByRole<HTMLButtonElement>('button', { name: 'I' })
+    expect(bookBtn.disabled).toBe(true)
 
     // Progress log shows wrong guess
-    expect(screen.getByText(/Wrong book/)).toBeInTheDocument()
+    screen.getByText(/Wrong book/)
   })
 
   it('handles right book but wrong chapter guess', async () => {
-    const user = await renderGame()
+    await renderGame()
 
     mockApiFetch.mockResolvedValueOnce(MOCK_GUESS_RIGHT_BOOK)
-    await makeGuess(user, 'I', 'The Boy Who Lived')
-    await dismissSplash(user)
+    await makeGuess('I', 'The Boy Who Lived')
+    await dismissSplash()
 
     // Book I should still be enabled (confirmed book)
-    const bookBtn = screen.getByRole('button', { name: 'I' })
-    expect(bookBtn).toBeEnabled()
+    const bookBtn = screen.getByRole<HTMLButtonElement>('button', { name: 'I' })
+    expect(bookBtn.disabled).toBe(false)
 
     // Other books should be locked out (disabled)
-    const bookBtnII = screen.getByRole('button', { name: 'II' })
-    expect(bookBtnII).toBeDisabled()
+    const bookBtnII = screen.getByRole<HTMLButtonElement>('button', { name: 'II' })
+    expect(bookBtnII.disabled).toBe(true)
 
     // Progress log shows right book
-    expect(screen.getByText(/Right book, wrong chapter/)).toBeInTheDocument()
+    screen.getByText(/Right book, wrong chapter/)
   })
 
   it('handles correct guess and shows success dialog', async () => {
-    const user = await renderGame()
+    await renderGame()
 
     mockApiFetch.mockResolvedValueOnce(MOCK_GUESS_CORRECT)
-    await makeGuess(user, 'I', 'The Boy Who Lived')
-    await dismissSplash(user)
+    await makeGuess('I', 'The Boy Who Lived')
+    await dismissSplash()
 
     // SuccessDialog should render with book name and chapter
-    await waitFor(() => {
-      expect(screen.getByText(/Philosopher's Stone/)).toBeInTheDocument()
-    })
+    await waitFor(() => screen.getByText(/Philosopher's Stone/))
     expect(document.querySelector('.success-dialog__chapter')!.textContent).toMatch(/The Boy Who Lived/)
-    expect(screen.getByText(/42\.5% into the chapter/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /copy result/i })).toBeInTheDocument()
+    screen.getByText(/42\.5% into the chapter/)
+    screen.getByRole('button', { name: /copy result/i })
   })
 
   it('copies share text to clipboard', async () => {
-    const user = await renderGame()
+    await renderGame()
 
     mockApiFetch.mockResolvedValueOnce(MOCK_GUESS_CORRECT)
-    await makeGuess(user, 'I', 'The Boy Who Lived')
-    await dismissSplash(user)
+    await makeGuess('I', 'The Boy Who Lived')
+    await dismissSplash()
 
     // Wait for success dialog
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /copy result/i })).toBeInTheDocument()
-    })
+    await waitFor(() => screen.getByRole('button', { name: /copy result/i }))
 
-    // Spy on clipboard.writeText at the point user-event has set it up
     const writeSpy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
-    await user.click(screen.getByRole('button', { name: /copy result/i }))
+    click(screen.getByRole('button', { name: /copy result/i }))
 
     expect(writeSpy).toHaveBeenCalledWith(
       expect.stringContaining('wizardle.net')
@@ -185,9 +180,7 @@ describe('Game integration tests', () => {
 
     render(<Game />)
 
-    await waitFor(() => {
-      expect(screen.getByText(/Philosopher's Stone/)).toBeInTheDocument()
-    })
+    await waitFor(() => screen.getByText(/Philosopher's Stone/))
     expect(document.querySelector('.success-dialog__chapter')!.textContent).toMatch(/The Boy Who Lived/)
 
     // Original legacy record preserved verbatim under the .legacy key
@@ -225,13 +218,13 @@ describe('Game integration tests', () => {
   })
 
   it('navigates to previous day', async () => {
-    const user = await renderGame()
+    await renderGame()
 
     // Set up mock for the new date's puzzle fetch
     const prevDatePuzzle = { ...MOCK_PUZZLE, date: '2026-01-14' }
     mockApiFetch.mockResolvedValueOnce(prevDatePuzzle)
 
-    await user.click(screen.getByLabelText('Previous puzzle'))
+    click(screen.getByLabelText('Previous puzzle'))
 
     // Should fetch puzzle with previous date
     await waitFor(() => {
@@ -241,6 +234,6 @@ describe('Game integration tests', () => {
     })
 
     // Date display should update
-    expect(screen.getByText('2026-01-14')).toBeInTheDocument()
+    screen.getByText('2026-01-14')
   })
 })
