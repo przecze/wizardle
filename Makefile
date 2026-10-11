@@ -1,7 +1,7 @@
 .PHONY: deploy reqs update_reqs py_audit py_audit_fix npm_audit npm_audit_fix chapters
 
 PYTHON_VERSION := 3.14.6
-UV_VERSION     := 0.11.14
+UV_VERSION     := 0.13.0
 NODE_VERSION   := 24.18
 
 # ── Deploy ────────────────────────────────────────────────────────────────────

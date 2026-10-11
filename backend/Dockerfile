@@ -3,7 +3,7 @@ FROM python:3.14.6-slim
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install "uv==0.11.18" && uv pip install --system --no-cache-dir -r requirements.txt
+RUN pip install "uv==0.13.0" && uv pip install --system --no-cache-dir -r requirements.txt
 
 COPY . .
 
