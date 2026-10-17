@@ -55,6 +55,7 @@
           - "--exclude=.DS_Store"
           - "--exclude=*.backup.*"
           - "--exclude=*_api_key.txt"
+          # Legacy AI-note cache (imported into data/); never sync a local one up
           - "--exclude=fragment_context_cache"
           - "--exclude=data"
           # Never copy raw input files to the server
@@ -67,12 +68,6 @@
         src: "{{ playbook_dir }}/../openrouter_prod_api_key.txt"
         dest: "{{ project_dir }}/openrouter_prod_api_key.txt"
         mode: '0600'
-
-    - name: Ensure fragment context cache directory exists
-      ansible.builtin.file:
-        path: "{{ project_dir }}/fragment_context_cache"
-        state: directory
-        mode: '0755'
 
     - name: Ensure data directory exists
       ansible.builtin.file:
@@ -95,17 +90,6 @@
     - name: Show docker compose output
       ansible.builtin.debug:
         var: docker_result.stdout_lines
-
-    # Idempotent: freezes any not-yet-frozen dates through tomorrow and imports
-    # the legacy fragment-context cache, right after the new backend starts.
-    - name: Freeze puzzles and import legacy fragment contexts
-      ansible.builtin.shell: |
-        cd {{ project_dir }} && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python backfill.py
-      register: backfill_result
-
-    - name: Show backfill output
-      ansible.builtin.debug:
-        var: backfill_result.stdout_lines
 
     - name: Check container status
       ansible.builtin.shell: |

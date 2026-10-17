@@ -52,7 +52,7 @@ cd backend && make reqs
 `input/full_text.txt` + `input/chapter_names.json` (gitignored, local-only) → `preprocessing/build_chapters.py` → `preprocessing/chapters/bookN_chapNN.tsv`
 
 TSV format (tab-separated, no header): `valid_start<TAB>token`
-- `valid_start = 1` if this position starts a unique bigram ≥15 tokens from either chapter boundary; `0` otherwise.
+- `valid_start = 1` if this position starts a valid opener (see `valid_openers` below); `0` otherwise.
 
 The backend loads **nothing at startup**. Chapter TSVs are read on demand, only to pick a not-yet-frozen date's puzzle and to feed the AI fragment-context model.
 
@@ -62,17 +62,19 @@ The backend loads **nothing at startup**. Chapter TSVs are read on demand, only 
 - `puzzles` — a puzzle is **frozen on first serve**: the ±20-word fragment window + book/chapter/position. Once frozen, `/puzzle`, `/word`, `/guess` serve it from here forever, so re-tokenizing chapters never changes a puzzle someone may have played or saved.
 - `fragment_contexts` — AI context note per date.
 
-`backend/backfill.py` (idempotent, run by every Ansible deploy right after the backend starts) freezes all dates through tomorrow and imports the legacy `fragment_context_cache/`. Re-tokenized chapters must only be deployed after a deploy of the *current* data has run it. Dev: `make pull_data` replaces the local DB with a fresh prod snapshot (also kept in `backups/`); clear frozen puzzles with `sqlite3 data/wizardle.db 'delete from puzzles'`.
+Freeze-on-serve is the only freezing mechanism: a date nobody has fetched yet has no player history, so re-tokenized chapters only ever affect unseen dates. Hand-placed past puzzles (wedding, dates re-anchored after earlier tokenizer changes) exist only as frozen DB rows. Dev: `make pull_data` replaces the local DB with a fresh prod snapshot (also kept in `backups/`); clear frozen puzzles with `sqlite3 data/wizardle.db 'delete from puzzles'`.
 
 ### Puzzle selection
 
 Valid dates: `EARLIEST_PUZZLE_DATE` (2026-03-14, first commit) through tomorrow (UTC). Earlier → 404 `{detail: {earliest_date}}` (frontend shows the Pensieve easter egg); later → 404.
 
+Dev preview of upcoming puzzles: in the dev stack (`DEV_MODE=true` on the backend, Vite dev server on the frontend) ▶ goes past today and the backend serves future dates. They get frozen into the dev DB — `make pull_data` resets it to prod's. The prod compose overlay replaces the backend `environment`, so `DEV_MODE` never reaches prod.
+
 For a date not yet frozen: date string → SHA-256 → integer seed →
 1. `seed % len(chapter_files)` → pick chapter TSV
 2. `(seed // len(chapter_files)) % len(valid_positions)` → pick valid_start=1 position within chapter
 
-`valid_openers` = positions where (this token + next non-dash token) is unique across entire series AND ≥15 tokens from either chapter boundary.
+`valid_openers` = positions where the *normalised* bigram (this token + next non-dash token, lowercased, punctuation stripped, both words non-empty) occurs in only one chapter of the series AND ≥15 tokens from either chapter boundary. Normalising stops punctuation/case from making a common phrase look unique (`,"said Harry`).
 
 ### API endpoints (all under `/api/` prefix via nginx)
 
@@ -81,6 +83,9 @@ For a date not yet frozen: date string → SHA-256 → integer seed →
 - `POST /guess` — `{date, book_num, chapter_num}` → correct/wrong + context fragment on correct
 
 ### Tokenization rules (build_chapters.py)
+
+- `OCR_ERRATA`: exact source fixes for OCR spacing damage (each must match exactly once); `lint_ocr` fails the build on any new punctuation-glued-to-word hit not in the errata or `OCR_LINT_ALLOWED`
+- Stray punctuation is re-attached: `?`/`!` onto a preceding `--` token, a lone `"` onto a preceding `?`/`!`/`--` token (closing) or else onto the next word (opening) — `where -- ?"` → `where--?"`
 
 - `,;.?!:` → suffix (attached to previous word)
 - `` ` ( [ " `` → prefix (attached to next word)

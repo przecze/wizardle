@@ -100,9 +100,9 @@ def get_fragment_context(date_str: str) -> tuple[str, str] | None:
         ).fetchone()
 
 
-def save_fragment_context(date_str: str, context: str, model: str, created_at: str | None = None) -> None:
+def save_fragment_context(date_str: str, context: str, model: str) -> None:
     with closing(_connect()) as conn, conn:
         conn.execute(
             "INSERT OR IGNORE INTO fragment_contexts (date, model, context, created_at) VALUES (?, ?, ?, ?)",
-            (date_str, model, context, created_at or _now()),
+            (date_str, model, context, _now()),
         )

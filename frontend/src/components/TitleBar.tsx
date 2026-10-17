@@ -1,4 +1,4 @@
-import { todayStr } from '../utils'
+import { canViewFuture, todayStr } from '../utils'
 import './TitleBar.css'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function TitleBar({ date, atEarliest, onNavigate }: Props) {
-  const isLatest = date >= todayStr()
+  const isLatest = !canViewFuture() && date >= todayStr()
   return (
     <header className="title-bar">
       <h1 className="title-bar__heading">Wizardle</h1>

@@ -2,8 +2,10 @@ services:
   backend:
     volumes: !override
       - ./preprocessing:/preprocessing:ro
-      - ./fragment_context_cache:/fragment_context_cache
       - ./data:/data
+    # Replace (not merge) the dev environment so dev-only flags never reach prod
+    environment: !override
+      - PYTHONUNBUFFERED=1
     command: uvicorn main:app --workers 1 --host 0.0.0.0 --port 8000
 
   site:

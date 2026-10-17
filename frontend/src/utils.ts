@@ -2,16 +2,30 @@ import { BookMeta, ChapterNamesRaw, MoveEntry } from './types'
 
 export const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
 
-// Defaults to the actual wedding date so a deploy with no VITE_WEDDING_DATE
-// set is always locked to it; set VITE_WEDDING_DATE to today's date locally
-// (e.g. in docker-compose.yml) to preview the special puzzle early.
-export const WEDDING_DATE = import.meta.env.VITE_WEDDING_DATE || '2026-07-25'
+// The wedding special puzzle (frozen in the backend DB) gets a ❤️ and a note.
+export const WEDDING_DATE = '2026-07-25'
 
 // Kept in sync (by hand) with the identical computation in backend/main.py's
 // _today_str(). If this logic changes, update that too or the server-rendered
 // puzzle data island silently stops matching.
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+// Shifts a YYYY-MM-DD date by whole days. Pure UTC arithmetic: shifting in
+// local time breaks across DST changes (e.g. +1 from 2026-03-29 in CET stays
+// on 2026-03-29, -1 from 2026-10-26 skips to 2026-10-24).
+export function shiftDate(date: string, days: number): string {
+  const d = new Date(date)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+// The Vite dev server lets you navigate past today to preview upcoming puzzles
+// (the dev backend serves them, see DEV_MODE in backend/main.py). Always false
+// in production builds.
+export function canViewFuture(): boolean {
+  return import.meta.env.DEV
 }
 
 export function getCookie(name: string): string | null {

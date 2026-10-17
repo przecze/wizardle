@@ -258,4 +258,26 @@ describe('Game integration tests', () => {
     expect(screen.queryByText(/bottom of the Pensieve/)).toBeNull()
     expect(document.querySelector('.title-bar__date')!.classList).not.toContain('title-bar__date--hidden')
   })
+
+  it('lets the dev server navigate past today to preview upcoming puzzles', async () => {
+    await renderGame()
+
+    const next = screen.getByRole<HTMLButtonElement>('button', { name: 'Next puzzle' })
+    expect(next.disabled).toBe(false)
+
+    mockApiFetch.mockResolvedValueOnce({ ...MOCK_PUZZLE, date: '2026-01-16' })
+    click(next)
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledWith(expect.stringContaining('2026-01-16')))
+    screen.getByText('2026-01-16')
+  })
+
+  it('stops at today in production builds', async () => {
+    vi.stubEnv('DEV', false)
+    try {
+      await renderGame()
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next puzzle' }).disabled).toBe(true)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })

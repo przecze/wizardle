@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChapterNamesRaw, PuzzleResponse, WordResponse, GuessResponse, WinnerInfo, MoveEntry, SplashData, FragmentContextResponse } from '../types'
-import { todayStr, apiFetch, buildBooksMeta, chapterTitle, earliestDateFromError, hasCookie, setCookie, WEDDING_DATE } from '../utils'
+import { canViewFuture, shiftDate, todayStr, apiFetch, buildBooksMeta, chapterTitle, earliestDateFromError, hasCookie, setCookie, WEDDING_DATE } from '../utils'
 import chapterNamesRaw from '../data/chapter_names.json'
 import { RevealedWords, RevealedWordsData } from '../revealedWords'
 import TitleBar from './TitleBar'
@@ -398,10 +398,8 @@ export default function Game() {
   }, [selectedBookNum, selectedChapter, loading, date, books, booksMeta])
 
   function navigateDate(delta: -1 | 1) {
-    const d = new Date(date)
-    d.setDate(d.getDate() + delta)
-    const next = d.toISOString().slice(0, 10)
-    if (next > todayStr()) return
+    const next = shiftDate(date, delta)
+    if (next > todayStr() && !canViewFuture()) return
     // Gameplay state (words, ruledOutBooks, etc.) is intentionally left as-is
     // here — the load effect below replaces it in one commit once the new
     // date's data is ready. Clearing it eagerly caused a real->blank->real

@@ -11,8 +11,8 @@ and to give the AI fragment-context model the full chapter text.
 
 TSV format (preprocessing/chapters/bookN_chapNN.tsv):
   valid_start<TAB>token
-  valid_start = 1 if (this token + next non-dash token) is a unique bigram
-                ≥15 tokens from either chapter boundary; 0 otherwise.
+  valid_start = 1 if (this token + next non-dash token) is a valid opener
+                (see preprocessing/build_chapters.py); 0 otherwise.
 """
 import hashlib
 import json
@@ -33,7 +33,6 @@ from db import Puzzle
 
 CHAPTERS_DIR       = Path(__file__).parent.parent / "preprocessing" / "chapters"
 CHAPTER_NAMES_PATH = Path(__file__).parent.parent / "preprocessing" / "chapter_names.json"
-PUZZLE_OVERRIDES_PATH = Path(__file__).parent / "daily_puzzle_position_overrides.json"
 OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
 MAX_WORDS_EACH_DIRECTION   = 15
 FRAGMENT_WORDS_EACH_SIDE    = 20  # snapshot window; must be ≥ MAX_WORDS_EACH_DIRECTION
@@ -41,15 +40,13 @@ FRAGMENT_WORDS_EACH_SIDE    = 20  # snapshot window; must be ≥ MAX_WORDS_EACH_
 # Date of the first commit — no puzzle exists before the game did.
 EARLIEST_PUZZLE_DATE = "2026-03-14"
 
+# Dev only (docker-compose.yml): serve future dates so upcoming puzzles can be
+# previewed in the browser. They get frozen into the dev DB like any other
+# date; `make pull_data` resets it to prod's.
+DEV_MODE = os.environ.get("DEV_MODE") == "true"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("wizardle")
-
-# Wedding special puzzle. Defaults to the actual wedding date so a deploy with
-# no WEDDING_DATE env var set is always locked to it; set WEDDING_DATE to
-# today's date locally (e.g. in docker-compose.yml) to preview it early.
-WEDDING_DATE  = os.environ.get("WEDDING_DATE") or "2026-07-25"
-WEDDING_CHAPTER_FILE = "book7_chap08.tsv"
-WEDDING_START_POS    = 2392  # "you bonded"
 
 FRAGMENT_CONTEXT_MODEL = "google/gemini-3.6-flash"
 FRAGMENT_CONTEXT_SYSTEM_PROMPT = (
@@ -178,23 +175,9 @@ def _select_puzzle(date_str: str) -> Puzzle:
       2. Load that chapter's TSV.
       3. Use seed to select one valid_start=1 position within the chapter.
 
-    If daily_puzzle_position_overrides.json contains an entry for date_str,
-    the chapter file and start_pos from that entry are used directly instead
-    of the seeding logic.
+    Past puzzles that were hand-placed (the wedding puzzle, dates re-anchored
+    after earlier tokenizer changes) live only in the DB as frozen snapshots.
     """
-    if date_str == WEDDING_DATE:
-        chosen_file = CHAPTERS_DIR / WEDDING_CHAPTER_FILE
-        return _snapshot(chosen_file, _load_chapter_tsv(chosen_file), WEDDING_START_POS)
-
-    # Check for manual override (used when token IDs shift after reprocessing)
-    if PUZZLE_OVERRIDES_PATH.exists():
-        with open(PUZZLE_OVERRIDES_PATH, encoding="utf-8") as f:
-            overrides = json.load(f)
-        if date_str in overrides:
-            ov = overrides[date_str]
-            chosen_file = CHAPTERS_DIR / ov["chapter_file"]
-            return _snapshot(chosen_file, _load_chapter_tsv(chosen_file), ov["start_pos"])
-
     seed = _date_seed(date_str)
     files = _all_chapter_files()
     if not files:
@@ -224,7 +207,8 @@ def _bigram(puzzle: Puzzle) -> list[str]:
 
 def _validate_date(date_str: str) -> None:
     """Reject malformed dates, dates before the game existed, and future dates
-    (tomorrow is allowed to tolerate client clocks running slightly ahead)."""
+    (tomorrow is allowed to tolerate client clocks running slightly ahead;
+    any future date is allowed in DEV_MODE)."""
     try:
         parsed = date.fromisoformat(date_str)
     except ValueError:
@@ -234,7 +218,7 @@ def _validate_date(date_str: str) -> None:
     if date_str < EARLIEST_PUZZLE_DATE:
         raise HTTPException(status_code=404, detail={"earliest_date": EARLIEST_PUZZLE_DATE})
     latest = (date.fromisoformat(_today_str()) + timedelta(days=1)).isoformat()
-    if date_str > latest:
+    if date_str > latest and not DEV_MODE:
         raise HTTPException(status_code=404, detail="Puzzle not available yet")
 
 

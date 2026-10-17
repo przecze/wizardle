@@ -24,7 +24,7 @@ export default function AboutDialog({ bigram, onClose }: Props) {
 
         <div className="about-body">
           <p>
-            These two words appear together <strong>exactly once</strong> in the whole <strong>Harry Potter book series</strong>.
+            These two words appear together in <strong>only one chapter</strong> of the whole <strong>Harry Potter book series</strong>.
           </p>
           <p>
             Can you guess the <strong>exact chapter</strong>?

@@ -14,8 +14,9 @@ TSV format — tab-separated, no header:
   valid_start<TAB>token
 
   valid_start = 1 if (this token + next non-dash token) forms a valid
-                opener bigram (unique across entire series AND ≥15 tokens
-                from either chapter boundary); 0 otherwise.
+                opener bigram (its normalised form — lowercase, punctuation
+                stripped — occurs in only one chapter of the series, AND it is
+                ≥15 tokens from either chapter boundary); 0 otherwise.
 
 Dash/ellipsis tokens (-, --, —, ...) are never valid_start=1.
 
@@ -90,6 +91,53 @@ CHAPTER_NUMBER_MAP  = {word: i + 1 for i, word in enumerate(_ORDINAL_LIST)}
 SKIP_FIX_TITLES: set[str] = {
     "THE GOBLET OF FIRE",  # Book 4 ch-16: starts with "I don't"
 }
+
+
+# ── OCR errata + lint ─────────────────────────────────────────────────────────
+
+# Exact fixes for OCR spacing damage in input/full_text.txt. Each key must occur
+# exactly once, so a changed source text fails loudly instead of silently.
+OCR_ERRATA = {
+    'shouted,"Tuck':        'shouted, "Tuck',         # opening quote glued to the comma
+    'demort ,"said Harry':  'demort," said Harry',    # space on the wrong side of ,"
+    '"Why not?"said Harry': '"Why not?" said Harry',
+    'hope. . . . .Nothing': 'hope. . . . Nothing',
+    'thought.The Sorting':  'thought. The Sorting',
+    'sunset.Nothing':       'sunset. Nothing',
+}
+
+# Punctuation glued to the following word — the tokenizer would keep it as one
+# token. Every hit must be fixed by OCR_ERRATA or be explicitly allowed.
+OCR_LINT_PATTERNS = [
+    re.compile(r'[,.;:!?]"[A-Za-z]'),        # quote glued to a word
+    re.compile(r'[a-z][.!?,;:][A-Za-z]'),    # missing space after punctuation
+]
+OCR_LINT_ALLOWED = [
+    re.compile(r'!"s\b'),                    # plural of a quoted phrase: many "No, please!"s
+    re.compile(r'e\.g\.|p\.m\.'),            # abbreviations
+]
+
+
+def apply_ocr_errata(text: str) -> str:
+    for old, new in OCR_ERRATA.items():
+        if text.count(old) != 1:
+            raise ValueError(f"OCR erratum {old!r} occurs {text.count(old)}x in the source (expected 1)")
+        text = text.replace(old, new)
+    return text
+
+
+def lint_ocr(text: str) -> None:
+    hits = [
+        text[max(0, m.start() - 25):m.end() + 15]
+        for pattern in OCR_LINT_PATTERNS
+        for m in pattern.finditer(text)
+        if not any(allowed.match(text, m.start()) for allowed in OCR_LINT_ALLOWED)
+    ]
+    if hits:
+        raise ValueError(
+            "Unhandled OCR spacing damage — add to OCR_ERRATA or OCR_LINT_ALLOWED:\n"
+            + "\n".join(f"  {h!r}" for h in hits)
+        )
 
 
 # ── TXT parsing helpers (from convert_txt.py) ─────────────────────────────────
@@ -239,6 +287,29 @@ def tokenize_text(text: str) -> list[str]:
         else:
             result.append(tok)
             i += 1
+    return _merge_stray_punctuation(result)
+
+
+def _merge_stray_punctuation(tokens: list[str]) -> list[str]:
+    """
+    Re-attach punctuation the source spaced off from its word, e.g. the book's
+    interrupted questions `where -- ?"` -> `where--?"`:
+      - `?` / `!` close onto a preceding token ending in `--`
+      - a lone `"` closes onto a preceding token ending in `?`, `!` or `--`;
+        otherwise it is an opening quote and attaches to the next word
+    """
+    result: list[str] = []
+    for i, tok in enumerate(tokens):
+        prev = result[-1] if result else ""
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        if tok in ("?", "!") and prev.endswith("--"):
+            result[-1] += tok
+        elif tok == '"' and prev.endswith(("?", "!", "--")):
+            result[-1] += tok
+        elif result and result[-1] == '"' and tok not in DASH_TOKENS:
+            result[-1] += tok   # opening quote held back by the branch below
+        else:
+            result.append(tok)
     return result
 
 
@@ -257,7 +328,9 @@ def parse_txt(path: Path) -> list[dict]:
     """
     CHAPTER_NAMES = load_chapter_names()
 
-    lines = path.read_text(encoding='latin-1').splitlines()
+    text = apply_ocr_errata(path.read_text(encoding='latin-1'))
+    lint_ocr(text)
+    lines = text.splitlines()
 
     book_idx       = -1
     chapter_num: int | None = None
@@ -353,37 +426,43 @@ def non_dash_pairs(tokens: list[str]) -> list[tuple[int, int]]:
     return pairs
 
 
+def normalize_word(token: str) -> str:
+    """Comparison form of a token: lowercase, punctuation stripped (inner
+    apostrophes kept). Punctuation-only tokens normalise to ''."""
+    return re.sub(r"[^\w']", "", token).strip("'").lower()
+
+
 def compute_valid_starts(chapters: list[dict]) -> list[set[int]]:
     """
     For each chapter (by index in `chapters`), return the set of token
     positions that are valid_start=1.
 
     A bigram at position i is valid if:
-      1. The bigram string appears exactly once across all chapters.
+      1. Both words contain letters/digits, and the normalised bigram occurs in
+         only one chapter — so punctuation or capitalisation alone (`,"said
+         Harry` vs `said Harry`) never makes a common phrase look unique, while
+         a phrase repeated within its own chapter still identifies the answer.
       2. i >= BOUNDARY_MARGIN and i <= len(tokens) - BOUNDARY_MARGIN - 1.
     """
-    # Step 1: count all bigrams across all chapters
-    bigram_counter: collections.Counter = collections.Counter()
-    for ch in chapters:
-        tokens = ch["tokens"]
+    def keys(tokens: list[str]):
         for i, j in non_dash_pairs(tokens):
-            bigram = f"{tokens[i]} {tokens[j]}"
-            bigram_counter[bigram] += 1
+            yield i, (normalize_word(tokens[i]), normalize_word(tokens[j]))
 
-    unique_bigrams = {b for b, c in bigram_counter.items() if c == 1}
+    # Step 1: which chapters each normalised bigram occurs in
+    chapters_by_bigram: dict[tuple[str, str], set[int]] = collections.defaultdict(set)
+    for c, ch in enumerate(chapters):
+        for _, key in keys(ch["tokens"]):
+            chapters_by_bigram[key].add(c)
 
     # Step 2: for each chapter, find valid start positions
     valid_sets: list[set[int]] = []
     for ch in chapters:
-        tokens  = ch["tokens"]
-        n       = len(tokens)
-        valid_p: set[int] = set()
-        for i, j in non_dash_pairs(tokens):
-            bigram = f"{tokens[i]} {tokens[j]}"
-            if bigram in unique_bigrams:
-                if i >= BOUNDARY_MARGIN and i <= n - BOUNDARY_MARGIN - 1:
-                    valid_p.add(i)
-        valid_sets.append(valid_p)
+        n = len(ch["tokens"])
+        valid_sets.append({
+            i for i, key in keys(ch["tokens"])
+            if all(key) and len(chapters_by_bigram[key]) == 1
+            and BOUNDARY_MARGIN <= i <= n - BOUNDARY_MARGIN - 1
+        })
 
     return valid_sets
 

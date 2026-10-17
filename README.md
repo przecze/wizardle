@@ -4,7 +4,7 @@
 
 A daily puzzle game for hardcore Potterheads. You're shown a two-word fragment from somewhere in the Harry Potter series — can you guess the exact book and chapter?
 
-The opening two word fragment is always unique across the entire series, so you could guess immediately. Or reveal more words, one at a time in either direction, to narrow it down. Everyone gets the same puzzle each day.
+The opening two word fragment appears in only one chapter of the entire series, so you could guess immediately. Or reveal more words, one at a time in either direction, to narrow it down. Everyone gets the same puzzle each day.
 
 Similar to Wordle, the game allows easy sharing of your daily result, represented by a set of emojis:
 ```
@@ -16,7 +16,7 @@ August 1st 2026
 
 ## Tech Stack
 
-- **Preprocessing** — Python + pandas: tokenizes the text, finds unique bigrams ≥15 tokens from chapter boundaries, outputs per-chapter TSVs
+- **Preprocessing** — Python: tokenizes the text, finds bigrams that (ignoring punctuation and case) occur in only one chapter, ≥15 tokens from chapter boundaries, outputs per-chapter TSVs
 - **Backend** — FastAPI (Python), date-seeded puzzle selection, word-reveal and guess endpoints
 - **Frontend** — React + TypeScript, Vite
 - **Infrastructure** — Docker Compose (dev + prod), Nginx, deployed via Ansible
