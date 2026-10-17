@@ -1,0 +1,32 @@
+# =============================================================================
+# Copy the prod SQLite DB (frozen puzzles, fragment contexts) into the local
+# dev data/ for debugging. Read-only on the server apart from refreshing
+# data/wizardle.backup.db; OVERWRITES the local dev data/wizardle.db.
+#
+#   make pull_data
+# =============================================================================
+
+- name: Pull prod data to dev
+  hosts: bluh
+
+  vars:
+    project_dir: /srv/projects/wizardle
+
+  tasks:
+    - name: Back up the SQLite DB to the control machine
+      ansible.builtin.include_tasks: backup_db.yml
+
+    - name: Fail if prod has no DB yet
+      ansible.builtin.fail:
+        msg: "No {{ project_dir }}/data/wizardle.db on the server"
+      when: not db_file.stat.exists
+
+    # Restore through the sqlite backup API rather than copying the file, so
+    # the dev backend (WAL mode) never sees a half-replaced database.
+    - name: Restore the snapshot into the local dev DB
+      delegate_to: localhost
+      ansible.builtin.shell: |
+        mkdir -p data && python3 -c \
+          "import sqlite3; sqlite3.connect('{{ db_backup_local }}').backup(sqlite3.connect('data/wizardle.db'))"
+      args:
+        chdir: "{{ playbook_dir }}/.."

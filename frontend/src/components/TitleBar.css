@@ -26,6 +26,10 @@
   margin: 0;
 }
 
+.title-bar__date--hidden {
+  visibility: hidden;
+}
+
 .title-bar__nav-btn {
   background: none;
   border: none;

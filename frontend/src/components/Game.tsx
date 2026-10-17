@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChapterNamesRaw, PuzzleResponse, WordResponse, GuessResponse, WinnerInfo, MoveEntry, SplashData, FragmentContextResponse } from '../types'
-import { todayStr, apiFetch, buildBooksMeta, chapterTitle, hasCookie, setCookie, WEDDING_DATE } from '../utils'
+import { todayStr, apiFetch, buildBooksMeta, chapterTitle, earliestDateFromError, hasCookie, setCookie, WEDDING_DATE } from '../utils'
 import chapterNamesRaw from '../data/chapter_names.json'
 import { RevealedWords, RevealedWordsData } from '../revealedWords'
 import TitleBar from './TitleBar'
@@ -11,6 +11,7 @@ import GuessDialog from './GuessDialog'
 import GuessAnimation from './GuessAnimation'
 import SuccessDialog from './SuccessDialog'
 import AboutDialog from './AboutDialog'
+import PensieveBottom from './PensieveBottom'
 import './Game.css'
 
 const ABOUT_SEEN_KEY = 'wizardle_about_seen'
@@ -211,6 +212,8 @@ export default function Game() {
   const [fragmentContextLoading, setFragmentContextLoading] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
+  // Set when navigation went past the first-ever puzzle (the server says which date that is).
+  const [earliestDate, setEarliestDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showAbout, setShowAbout] = useState(() => !hasCookie(ABOUT_SEEN_KEY))
   const [flashHints, setFlashHints] = useState(false)
@@ -308,8 +311,13 @@ export default function Game() {
           setConfirmedBook(null)
         }
         loadedDateRef.current = date
+        setEarliestDate(null)
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => {
+        const earliest = earliestDateFromError(e)
+        if (earliest) setEarliestDate(earliest)
+        else setError(e.message)
+      })
       .finally(() => setLoading(false))
   }, [date, refreshKey])
 
@@ -426,13 +434,15 @@ export default function Game() {
   return (
     <div className="game">
 
-      <TitleBar date={date} onNavigate={navigateDate} />
+      <TitleBar date={date} atEarliest={earliestDate !== null} onNavigate={navigateDate} />
 
       {error && (
         <p className="game__error">{error}</p>
       )}
 
-      {showSuccess && winner ? (
+      {earliestDate ? (
+        <PensieveBottom earliestDate={earliestDate} />
+      ) : showSuccess && winner ? (
         <SuccessDialog winner={winner} books={books} booksMeta={booksMeta} moveLog={moveLog} date={date} origBigram={revealed.origBigram} onReset={handleReset} fragmentContextText={fragmentContextText} fragmentContextModel={fragmentContextModel} fragmentContextLoading={fragmentContextLoading} />
       ) : (
         <TextArea
@@ -447,7 +457,7 @@ export default function Game() {
         />
       )}
 
-      {!winner && (
+      {!winner && !earliestDate && (
         <GuessButtons
           books={books}
           ruledOutBooks={ruledOutBooks}
@@ -459,7 +469,7 @@ export default function Game() {
         />
       )}
 
-      <ProgressLog moveLog={moveLog} books={books} booksMeta={booksMeta} />
+      {!earliestDate && <ProgressLog moveLog={moveLog} books={books} booksMeta={booksMeta} />}
 
       {guessPhase === 'chapter' && selectedBookNum && (
         <GuessDialog

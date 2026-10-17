@@ -3,10 +3,11 @@ import './TitleBar.css'
 
 interface Props {
   date: string
+  atEarliest: boolean
   onNavigate: (delta: -1 | 1) => void
 }
 
-export default function TitleBar({ date, onNavigate }: Props) {
+export default function TitleBar({ date, atEarliest, onNavigate }: Props) {
   const isLatest = date >= todayStr()
   return (
     <header className="title-bar">
@@ -15,9 +16,11 @@ export default function TitleBar({ date, onNavigate }: Props) {
         <button
           className="title-bar__nav-btn"
           onClick={() => onNavigate(-1)}
+          disabled={atEarliest}
           aria-label="Previous puzzle"
         >◀</button>
-        <p className="title-bar__date">{date}</p>
+        {/* Hidden (not removed) past the earliest puzzle so the arrows don't shift */}
+        <p className={atEarliest ? 'title-bar__date title-bar__date--hidden' : 'title-bar__date'}>{date}</p>
         <button
           className="title-bar__nav-btn"
           onClick={() => onNavigate(1)}

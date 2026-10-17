@@ -5,6 +5,7 @@ services:
       - ./backend:/app
       - ./preprocessing:/preprocessing:ro
       - ./fragment_context_cache:/fragment_context_cache
+      - ./data:/data
     secrets:
       - openrouter_key
     environment:

@@ -40,3 +40,6 @@ frontend/src/data/chapter_names.json
 
 # Local hint cache
 fragment_context_cache/
+
+# SQLite storage (frozen puzzles, fragment contexts)
+data/

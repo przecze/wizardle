@@ -1,0 +1,37 @@
+@keyframes pensieveSwirl {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.pensieve-bottom {
+  background: #fffdf7;
+  border: 1px solid #d8ccb4;
+  border-radius: 6px;
+  padding: 24px 16px;
+  margin-bottom: 24px;
+  text-align: center;
+  color: #2c2416;
+  box-shadow: 0 1px 4px rgba(44, 36, 22, 0.05);
+}
+
+.pensieve-bottom__swirl {
+  display: inline-block;
+  font-size: 32px;
+  margin-bottom: 10px;
+  animation: pensieveSwirl 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pensieve-bottom__swirl { animation: none; }
+}
+
+.pensieve-bottom__title {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.pensieve-bottom__body {
+  font-size: 13px;
+  color: #9a8a72;
+  margin: 0;
+}

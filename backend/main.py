@@ -1,9 +1,13 @@
 """
 Wizardle API — FastAPI backend.
 
-Loads nothing at startup. Chapter TSVs are read from preprocessing/chapters/
-on demand per request. Books/chapters metadata (chapter_names.json) is read
+Loads nothing at startup. Books/chapters metadata (chapter_names.json) is read
 once, lazily, on first request and cached in-process for the process lifetime.
+
+Every puzzle is frozen into SQLite (see db.py) the first time its date is
+served, and served from there ever after. Chapter TSVs from
+preprocessing/chapters/ are only read to pick a not-yet-frozen date's puzzle
+and to give the AI fragment-context model the full chapter text.
 
 TSV format (preprocessing/chapters/bookN_chapNN.tsv):
   valid_start<TAB>token
@@ -16,8 +20,7 @@ import logging
 import os
 import re
 import urllib.request
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -25,13 +28,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+import db
+from db import Puzzle
+
 CHAPTERS_DIR       = Path(__file__).parent.parent / "preprocessing" / "chapters"
 CHAPTER_NAMES_PATH = Path(__file__).parent.parent / "preprocessing" / "chapter_names.json"
 PUZZLE_OVERRIDES_PATH = Path(__file__).parent / "daily_puzzle_position_overrides.json"
-FRAGMENT_CONTEXT_CACHE_DIR = Path("/fragment_context_cache")
 OPENROUTER_KEY_PATH        = Path("/run/secrets/openrouter_key")
 MAX_WORDS_EACH_DIRECTION   = 15
-FRAGMENT_WORDS_EACH_SIDE    = 20
+FRAGMENT_WORDS_EACH_SIDE    = 20  # snapshot window; must be ≥ MAX_WORDS_EACH_DIRECTION
+
+# Date of the first commit — no puzzle exists before the game did.
+EARLIEST_PUZZLE_DATE = "2026-03-14"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("wizardle")
@@ -138,61 +146,37 @@ def _date_seed(date_str: str) -> int:
     return int.from_bytes(h[:8], "big")
 
 
-@dataclass(frozen=True)
-class Puzzle:
-    """The day's puzzle. Numbers only — book/chapter titles are not this
-    layer's concern; the only place that needs them is the AI fragment-context
-    feature, which resolves them itself from book_num/chapter_num."""
-    book_num: int
-    chapter_num: int
-    word1: str
-    word2: str
-    start_pos: int      # token index of word1 in chapter
-    position_pct: float
-    file_path: Path
-
-
-def _build_puzzle(chosen_file: Path, rows: list[tuple[int, str]], start_pos: int) -> Puzzle:
-    """Assemble the Puzzle for a chosen chapter file + start position."""
+def _snapshot(chosen_file: Path, rows: list[tuple[int, str]], start_pos: int) -> Puzzle:
+    """Cut the frozen snapshot (fragment window + metadata) for a chosen chapter file + start position."""
     m = re.match(r"book(\d+)_chap(\d+)\.tsv$", chosen_file.name)
     if not m:
         raise HTTPException(status_code=500, detail=f"Bad filename: {chosen_file.name}")
-    book_num    = int(m.group(1))
-    chapter_num = int(m.group(2))
 
-    word1 = rows[start_pos][1]
-
-    # Find next non-dash token for word2
-    word2 = None
-    for j in range(start_pos + 1, len(rows)):
-        if rows[j][1] not in DASH_TOKENS:
-            word2 = rows[j][1]
-            break
-    if word2 is None:
+    tokens = [tok for _, tok in rows]
+    left_tokens, mid_tokens, right_tokens = _fragment_window(tokens, start_pos)
+    if not any(t not in DASH_TOKENS for t in tokens[start_pos + 1:]):
         raise HTTPException(status_code=500, detail="Could not find word2 for puzzle")
 
-    position_pct = round(start_pos / max(len(rows) - 1, 1) * 100, 2)
-
     return Puzzle(
-        book_num=book_num,
-        chapter_num=chapter_num,
-        word1=word1,
-        word2=word2,
+        book_num=int(m.group(1)),
+        chapter_num=int(m.group(2)),
+        chapter_file=chosen_file.name,
         start_pos=start_pos,
-        position_pct=position_pct,
-        file_path=chosen_file,
+        position_pct=round(start_pos / max(len(rows) - 1, 1) * 100, 2),
+        tokens=left_tokens + mid_tokens + right_tokens,
+        anchor=len(left_tokens),
     )
 
 
-def _get_puzzle(date_str: str) -> Puzzle:
+def _select_puzzle(date_str: str) -> Puzzle:
     """
-    Deterministically pick a chapter and valid-opener position for a date.
+    Deterministically pick a chapter and valid-opener position for a date
+    from the current chapter TSVs.
 
     Strategy:
       1. Use date seed to select a chapter file (uniform across all chapters).
       2. Load that chapter's TSV.
       3. Use seed to select one valid_start=1 position within the chapter.
-      4. Derive word1 and word2 (next non-dash token after word1).
 
     If daily_puzzle_position_overrides.json contains an entry for date_str,
     the chapter file and start_pos from that entry are used directly instead
@@ -200,8 +184,7 @@ def _get_puzzle(date_str: str) -> Puzzle:
     """
     if date_str == WEDDING_DATE:
         chosen_file = CHAPTERS_DIR / WEDDING_CHAPTER_FILE
-        rows = _load_chapter_tsv(chosen_file)
-        return _build_puzzle(chosen_file, rows, WEDDING_START_POS)
+        return _snapshot(chosen_file, _load_chapter_tsv(chosen_file), WEDDING_START_POS)
 
     # Check for manual override (used when token IDs shift after reprocessing)
     if PUZZLE_OVERRIDES_PATH.exists():
@@ -210,8 +193,7 @@ def _get_puzzle(date_str: str) -> Puzzle:
         if date_str in overrides:
             ov = overrides[date_str]
             chosen_file = CHAPTERS_DIR / ov["chapter_file"]
-            rows = _load_chapter_tsv(chosen_file)
-            return _build_puzzle(chosen_file, rows, ov["start_pos"])
+            return _snapshot(chosen_file, _load_chapter_tsv(chosen_file), ov["start_pos"])
 
     seed = _date_seed(date_str)
     files = _all_chapter_files()
@@ -231,23 +213,52 @@ def _get_puzzle(date_str: str) -> Puzzle:
     inner_seed = seed // len(files)
     start_pos = valid_positions[inner_seed % len(valid_positions)]
 
-    return _build_puzzle(chosen_file, rows, start_pos)
+    return _snapshot(chosen_file, rows, start_pos)
+
+
+def _bigram(puzzle: Puzzle) -> list[str]:
+    """word1 plus the next non-dash token after it."""
+    word2 = next(t for t in puzzle.tokens[puzzle.anchor + 1:] if t not in DASH_TOKENS)
+    return [puzzle.tokens[puzzle.anchor], word2]
+
+
+def _validate_date(date_str: str) -> None:
+    """Reject malformed dates, dates before the game existed, and future dates
+    (tomorrow is allowed to tolerate client clocks running slightly ahead)."""
+    try:
+        parsed = date.fromisoformat(date_str)
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.isoformat() != date_str:
+        raise HTTPException(status_code=400, detail=f"Invalid date: {date_str!r}, expected YYYY-MM-DD")
+    if date_str < EARLIEST_PUZZLE_DATE:
+        raise HTTPException(status_code=404, detail={"earliest_date": EARLIEST_PUZZLE_DATE})
+    latest = (date.fromisoformat(_today_str()) + timedelta(days=1)).isoformat()
+    if date_str > latest:
+        raise HTTPException(status_code=404, detail="Puzzle not available yet")
+
+
+def _get_puzzle(date_str: str) -> Puzzle:
+    """The frozen puzzle for a date, freezing it first if it was never served."""
+    _validate_date(date_str)
+    return db.get_puzzle(date_str) or db.freeze_puzzle(date_str, _select_puzzle(date_str))
 
 
 # ---------------------------------------------------------------------------
 # Token navigation helpers
 # ---------------------------------------------------------------------------
 
-def _find_token_positions(tokens: list[str], words: list[str]) -> int | None:
+def _find_token_positions(tokens: list[str], words: list[str], anchor: int) -> int | None:
     """
     Find the starting index in tokens where the words sequence appears
-    (as a contiguous run, skipping DASH_TOKENS).
+    (as a contiguous run, skipping DASH_TOKENS) and covers the bigram at anchor.
     Returns the index of the first word, or None if not found.
     """
     non_dash = [(i, t) for i, t in enumerate(tokens) if t not in DASH_TOKENS]
     for start in range(len(non_dash) - len(words) + 1):
         if all(non_dash[start + j][1] == words[j] for j in range(len(words))):
-            return non_dash[start][0]
+            if non_dash[start][0] <= anchor <= non_dash[start + len(words) - 1][0]:
+                return non_dash[start][0]
     return None
 
 
@@ -317,7 +328,7 @@ def _today_str() -> str:
 def _puzzle_payload(date_str: str, puzzle: Puzzle) -> dict:
     """Shape shared by GET /puzzle and the "/" data island — the only two
     places that hand the day's bigram to the client."""
-    return {"date": date_str, "words": [puzzle.word1, puzzle.word2]}
+    return {"date": date_str, "words": _bigram(puzzle)}
 
 
 @app.get("/puzzle-island", response_class=HTMLResponse)
@@ -361,16 +372,15 @@ def get_next_word(req: WordRequest):
     """Return the next word to reveal (left or right)."""
     logger.info(f"POST /word date={req.date} dir={req.direction}")
     puzzle = _get_puzzle(req.date)
-    tokens = _chapter_tokens(puzzle.file_path)
+    tokens = puzzle.tokens
+    orig_pos = puzzle.anchor
 
-    start_pos = _find_token_positions(tokens, req.revealed_words)
+    start_pos = _find_token_positions(tokens, req.revealed_words, orig_pos)
     if start_pos is None:
         raise HTTPException(
             status_code=400,
             detail="revealed_words do not match puzzle for this date",
         )
-
-    orig_pos = puzzle.start_pos
 
     if req.direction == "left":
         non_dash_added = sum(
@@ -435,19 +445,14 @@ def submit_guess(req: GuessRequest):
     if not correct:
         return {"correct": False, "book_correct": book_correct, "answer": None}
 
-    tokens   = _chapter_tokens(puzzle.file_path)
-    orig_pos = puzzle.start_pos
-    left_tokens, mid_tokens, right_tokens = _fragment_window(tokens, orig_pos)
-    fragment_tokens = left_tokens + mid_tokens + right_tokens
-
     return {
         "correct":      True,
         "book_correct": True,
         "answer": {
-            "full_fragment": " ".join(fragment_tokens),
+            "full_fragment": " ".join(puzzle.tokens),
             "position_pct":  puzzle.position_pct,
-            "bigram_start":  len(left_tokens),
-            "bigram_len":    len(mid_tokens),
+            "bigram_start":  puzzle.anchor,
+            "bigram_len":    2,
         },
     }
 
@@ -461,16 +466,6 @@ def _book_and_chapter_name(book_num: int, chapter_num: int) -> tuple[str, str]:
     book_name = _get_book_names()[book_num - 1]
     chapter_name = _get_books_meta().get(book_name, {}).get("chapter_names", {}).get(chapter_num, "")
     return book_name, chapter_name
-
-
-def _build_full_fragment(date_str: str) -> tuple[str, str, str]:
-    """Return (full_fragment, book_name, chapter_name) for a date."""
-    puzzle = _get_puzzle(date_str)
-    tokens = _chapter_tokens(puzzle.file_path)
-    left_tokens, mid_tokens, right_tokens = _fragment_window(tokens, puzzle.start_pos)
-    full_fragment = " ".join(left_tokens + mid_tokens + right_tokens)
-    book_name, chapter_name = _book_and_chapter_name(puzzle.book_num, puzzle.chapter_num)
-    return full_fragment, book_name, chapter_name
 
 
 def _call_llm_with_chapter(
@@ -530,44 +525,36 @@ def get_fragment_context(req: FragmentContextRequest):
     """
     Return an AI-generated context note for the day's puzzle fragment.
     Requires the correct book + chapter (from /guess success) as proof of win.
-    Result is cached per date so the model is only called once per day.
+    Result is stored per date so the model is only called once per puzzle.
     """
     logger.info(f"POST /fragment-context date={req.date} book_num={req.book_num} chapter_num={req.chapter_num}")
     _validate_book_num(req.book_num)
 
     # Verify book + chapter match ground truth (proof of win)
-    try:
-        puzzle = _get_puzzle(req.date)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+    puzzle = _get_puzzle(req.date)
     if req.book_num != puzzle.book_num or req.chapter_num != puzzle.chapter_num:
         raise HTTPException(status_code=403, detail="Incorrect book or chapter")
 
-    try:
-        full_fragment, book, chapter_name = _build_full_fragment(req.date)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    # Return cached result if available
-    FRAGMENT_CONTEXT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_file = FRAGMENT_CONTEXT_CACHE_DIR / f"{req.date}.txt"
-    if cache_file.exists():
+    stored = db.get_fragment_context(req.date)
+    if stored:
         logger.info(f"Fragment context cache hit for {req.date}")
-        return {"context": cache_file.read_text(encoding="utf-8"), "model": FRAGMENT_CONTEXT_MODEL, "cached": True}
+        context, model = stored
+        return {"context": context, "model": model, "cached": True}
 
-    # Fetch full chapter text for the model
-    full_chapter_text = " ".join(_chapter_tokens(puzzle.file_path))
+    book, chapter_name = _book_and_chapter_name(puzzle.book_num, puzzle.chapter_num)
+    # Today's TSV for this chapter — may be tokenized slightly differently than
+    # the frozen fragment, which is fine for giving the model the full chapter.
+    full_chapter_text = " ".join(_chapter_tokens(CHAPTERS_DIR / puzzle.chapter_file))
 
     try:
         context = _call_llm_with_chapter(
-            full_fragment, book, chapter_name, full_chapter_text
+            " ".join(puzzle.tokens), book, chapter_name, full_chapter_text
         )
     except Exception as e:
         logger.error(f"Fragment-context LLM call failed: {e}")
         raise HTTPException(status_code=502, detail=f"AI fragment context unavailable: {e}")
 
-    cache_file.write_text(context, encoding="utf-8")
-    logger.info(f"Fragment context generated and cached for {req.date}")
+    db.save_fragment_context(req.date, context, FRAGMENT_CONTEXT_MODEL)
+    logger.info(f"Fragment context generated and stored for {req.date}")
 
     return {"context": context, "model": FRAGMENT_CONTEXT_MODEL, "cached": False}

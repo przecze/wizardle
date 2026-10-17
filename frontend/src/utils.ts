@@ -46,12 +46,30 @@ export function buildBooksMeta(raw: ChapterNamesRaw): { books: string[]; booksMe
   return { books, booksMeta }
 }
 
+// Carries the parsed FastAPI `detail` so callers can react to specific errors
+// (e.g. the earliest-puzzle 404) instead of only showing the message.
+export class ApiError extends Error {
+  constructor(readonly status: number, readonly detail: unknown, text: string) {
+    super(`API ${status}: ${text}`)
+  }
+}
+
 export async function parseApiResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`API ${res.status}: ${text}`)
+    let detail: unknown = null
+    try { detail = JSON.parse(text).detail } catch { /* non-JSON error body */ }
+    throw new ApiError(res.status, detail, text)
   }
   return res.json() as Promise<T>
+}
+
+// The backend answers a date before the first-ever puzzle with
+// 404 {detail: {earliest_date}}; returns that date, or null for any other error.
+export function earliestDateFromError(e: unknown): string | null {
+  if (!(e instanceof ApiError) || e.status !== 404) return null
+  const detail = e.detail as { earliest_date?: unknown } | null
+  return typeof detail?.earliest_date === 'string' ? detail.earliest_date : null
 }
 
 export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {

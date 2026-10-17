@@ -1,0 +1,25 @@
+# Shared by deploy.yml (backup before every deploy) and pull_data.yml (copy prod data to dev).
+# Sets db_file (stat of the server DB) and db_backup_local (path of the fetched copy).
+- name: Check for an existing SQLite DB
+  ansible.builtin.stat:
+    path: "{{ project_dir }}/data/wizardle.db"
+  register: db_file
+
+# Online backup through the running backend so a concurrent write can't
+# leave a torn copy (and the host needn't have the sqlite3 CLI).
+- name: Snapshot the SQLite DB
+  ansible.builtin.shell: |
+    cd {{ project_dir }} && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python -c \
+      "import sqlite3; sqlite3.connect('/data/wizardle.db').backup(sqlite3.connect('/data/wizardle.backup.db'))"
+  when: db_file.stat.exists
+
+- name: Pick the local backup path
+  ansible.builtin.set_fact:
+    db_backup_local: "{{ playbook_dir }}/../backups/wizardle.backup.{{ ansible_date_time.iso8601_basic_short }}.db"
+
+- name: Fetch DB snapshot to the control machine
+  ansible.builtin.fetch:
+    src: "{{ project_dir }}/data/wizardle.backup.db"
+    dest: "{{ db_backup_local }}"
+    flat: yes
+  when: db_file.stat.exists

@@ -9,6 +9,8 @@
 #
 # 2. DATA FILES:
 #    - input/: raw source material, NEVER copied to server
+#    - data/: server-side SQLite DB, NEVER overwritten by sync; backed up to
+#      ../backups/ on the control machine before every deploy
 #
 # 3. NGINX-PROXY INTEGRATION:
 #    - Connects to existing nginx-proxy network (external: true)
@@ -54,6 +56,7 @@
           - "--exclude=*.backup.*"
           - "--exclude=*_api_key.txt"
           - "--exclude=fragment_context_cache"
+          - "--exclude=data"
           # Never copy raw input files to the server
           - "--exclude=input"
           # Large source CSV - use checksum to skip if unchanged
@@ -71,6 +74,15 @@
         state: directory
         mode: '0755'
 
+    - name: Ensure data directory exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}/data"
+        state: directory
+        mode: '0755'
+
+    - name: Back up the SQLite DB to the control machine
+      ansible.builtin.include_tasks: backup_db.yml
+
     - name: Build images (production profile)
       ansible.builtin.shell: |
         cd {{ project_dir }} && docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production build backend site
@@ -83,6 +95,17 @@
     - name: Show docker compose output
       ansible.builtin.debug:
         var: docker_result.stdout_lines
+
+    # Idempotent: freezes any not-yet-frozen dates through tomorrow and imports
+    # the legacy fragment-context cache, right after the new backend starts.
+    - name: Freeze puzzles and import legacy fragment contexts
+      ansible.builtin.shell: |
+        cd {{ project_dir }} && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend python backfill.py
+      register: backfill_result
+
+    - name: Show backfill output
+      ansible.builtin.debug:
+        var: backfill_result.stdout_lines
 
     - name: Check container status
       ansible.builtin.shell: |

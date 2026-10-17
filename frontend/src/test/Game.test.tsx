@@ -9,7 +9,7 @@ vi.mock('../utils', async (importOriginal) => {
   }
 })
 
-import { apiFetch } from '../utils'
+import { apiFetch, ApiError } from '../utils'
 import Game from '../components/Game'
 import {
   TEST_DATE,
@@ -235,5 +235,27 @@ describe('Game integration tests', () => {
 
     // Date display should update
     screen.getByText('2026-01-14')
+  })
+
+  it('shows the Pensieve easter egg when navigating before the earliest puzzle', async () => {
+    await renderGame()
+
+    mockApiFetch.mockRejectedValueOnce(
+      new ApiError(404, { earliest_date: TEST_DATE }, '{"detail":{"earliest_date":"' + TEST_DATE + '"}}'),
+    )
+    click(screen.getByLabelText('Previous puzzle'))
+
+    await waitFor(() => screen.getByText(/bottom of the Pensieve/))
+    screen.getByText(`${TEST_DATE} was the earliest Wizardle puzzle available to play.`)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Previous puzzle' }).disabled).toBe(true)
+    expect(document.querySelector('.title-bar__date')!.classList).toContain('title-bar__date--hidden')
+    expect(screen.queryByRole('button', { name: 'I' })).toBeNull()
+    expect(document.querySelector('.game__error')).toBeNull()
+
+    // Navigating forward again leaves the Pensieve and shows the puzzle
+    click(screen.getByLabelText('Next puzzle'))
+    await waitFor(() => screen.getByText('dark'))
+    expect(screen.queryByText(/bottom of the Pensieve/)).toBeNull()
+    expect(document.querySelector('.title-bar__date')!.classList).not.toContain('title-bar__date--hidden')
   })
 })

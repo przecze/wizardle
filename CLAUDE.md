@@ -54,11 +54,21 @@ cd backend && make reqs
 TSV format (tab-separated, no header): `valid_start<TAB>token`
 - `valid_start = 1` if this position starts a unique bigram ≥15 tokens from either chapter boundary; `0` otherwise.
 
-The backend loads **nothing at startup**. Chapter TSVs are read on demand per request.
+The backend loads **nothing at startup**. Chapter TSVs are read on demand, only to pick a not-yet-frozen date's puzzle and to feed the AI fragment-context model.
+
+### Storage (SQLite, `backend/db.py`)
+
+`./data/wizardle.db` (bind-mounted at `/data`, gitignored, never rsynced; Ansible fetches a backup to `backups/` before each deploy):
+- `puzzles` — a puzzle is **frozen on first serve**: the ±20-word fragment window + book/chapter/position. Once frozen, `/puzzle`, `/word`, `/guess` serve it from here forever, so re-tokenizing chapters never changes a puzzle someone may have played or saved.
+- `fragment_contexts` — AI context note per date.
+
+`backend/backfill.py` (idempotent, run by every Ansible deploy right after the backend starts) freezes all dates through tomorrow and imports the legacy `fragment_context_cache/`. Re-tokenized chapters must only be deployed after a deploy of the *current* data has run it. Dev: `make pull_data` replaces the local DB with a fresh prod snapshot (also kept in `backups/`); clear frozen puzzles with `sqlite3 data/wizardle.db 'delete from puzzles'`.
 
 ### Puzzle selection
 
-Date string → SHA-256 → integer seed →
+Valid dates: `EARLIEST_PUZZLE_DATE` (2026-03-14, first commit) through tomorrow (UTC). Earlier → 404 `{detail: {earliest_date}}` (frontend shows the Pensieve easter egg); later → 404.
+
+For a date not yet frozen: date string → SHA-256 → integer seed →
 1. `seed % len(chapter_files)` → pick chapter TSV
 2. `(seed // len(chapter_files)) % len(valid_positions)` → pick valid_start=1 position within chapter
 
@@ -105,6 +115,7 @@ Single `nginx.conf.template` with `DEV_MODE` env var:
 | `GuessDialog.tsx` | Chapter picker modal (search, highlight, guessed state) |
 | `GuessAnimation.tsx` | Hourglass → result emoji splash overlay |
 | `SuccessDialog.tsx` | Win panel with context fragment + copy-result button |
+| `PensieveBottom.tsx` | Easter egg shown when navigating before the earliest puzzle |
 
 ### Docker Compose services
 
